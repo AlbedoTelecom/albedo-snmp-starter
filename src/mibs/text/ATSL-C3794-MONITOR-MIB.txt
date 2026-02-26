@@ -1,0 +1,634 @@
+ATSL-C3794-MONITOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for IEEE C37.94 monitoring and performance evaluation.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter32               FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus                  FROM SNMPv2-TC
+    atslGeneral, TableIndex, RatioPercentage              FROM ATSL-MIB;
+
+c3794Monitor MODULE-IDENTITY
+    LAST-UPDATED "201707180000Z" -- 18 July, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module defines configuration fields and tables required for 
+         result retrieval from an IEEE C37.94 monitor. Defects and anomalies 
+         are derived from the definitions given in the IEEE C37.94 standards. 
+         Anomalies and defects related with test patterns ('TSE', 'LSS', 'All 
+         0', 'All 1', 'Slip') are shared with other interfaces such as E1 and 
+         T1 and they work in the same way.
+
+         The 'c3794Monitor' does not supply any resource required to configure
+         the IEEE C37.94 signal or frame structure in the agent and assumes this
+         configuration as something given. It follows a list with the Scalars
+         and tables defined by the MIB:
+
+         Scalars
+
+        - 'c3794MonEnable': Starts / Stops network monitoring in the managed
+          entity. The action starts monitoring in all the available blocks. The
+          number of monitoring blocks may not be the same for different managed
+          entities and it may be that there is only one monitoring block for
+          some of them.
+
+         Tables
+
+        - 'c3794MonAnomaliesTable': Table that stores information about 
+          anomalies recorded in the IEEE C37.94 interface. An anomaly is 
+          defined as the smallest discrepancy which can be observed between 
+          the actual and desired characteristics in the IEEE C37.94 frame 
+          structure or content. The occurrence of a single anomaly does not 
+          constitute an interruption in the ability to perform a required 
+          function but it may involve temporary transmission performance 
+          degradation. For the particular case of IEEE C37.94 transmission 
+          systems, examples of anomalies are isolated bit errors (usually 
+          recorded as TSE errors by test equipment), FAS errors and code
+          errors.
+
+        - 'c3794MonDefectsTable': This is a table that contains information 
+          about defects declared in IEEE C37.94 signals received by the agent 
+          test ports. A defect is declared when the density of anomalies has 
+          reached a level where the ability to perform a required function has 
+          been interrupted. Defects are usually persistent indications of a 
+          fault that clear only when the triggering condition has been resolved. 
+          In the particular case of IEEE C37.94 transmission systems, typical 
+          examples of defects are the loss of signal (LOS), Remote Defect 
+          Indication (RDI) and the alarm indication signal (AIS).
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+        - Ether10.Genius 10GbE / E1/T1 / Datacom / C37.94 Tester"
+    REVISION     "201707180000Z" -- 18 July, 2017
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 30 }
+
+--
+-- Top level module structure
+--
+
+c3794MonControl      OBJECT IDENTIFIER ::= { c3794Monitor 1 }
+
+--
+-- Monitoring enable / disable control group
+--
+
+c3794MonEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops network monitoring in the managed entity. The action
+         starts monitoring in all the available blocks. The number of monitoring
+         blocks may not be the same for different managed entities and it may
+         be that there is only one monitoring block for some of them."
+    ::= { c3794MonControl 1 }
+
+--
+--  C3794 Anomalies result table
+--
+
+c3794MonAnomaliesTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF C3794MonAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table that stores information about anomalies recorded in the IEEE 
+         C37.94 interface. An anomaly is defined as the smallest discrepancy 
+         which can be observed between the actual and desired characteristics in 
+         the IEEE C37.94 frame structure or content. The occurrence of a single 
+         anomaly does not constitute an interruption in the ability to perform a 
+         required function but it may involve temporary transmission 
+         performance degradation. 
+
+         For the particular case of IEEE C37.94 transmission systems, examples 
+         of anomalies are isolated bit errors (usually recorded as TSE errors 
+         by test equipment), FAS errors and code errors."
+     REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794Monitor 2 }
+
+c3794MonAnomaliesEntry OBJECT-TYPE
+    SYNTAX            C3794MonAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing T1 anomaly statistics corresponding to a
+         particular monitoring block."
+    INDEX { c3794MonAnomaliesIndex }
+    ::= { c3794MonAnomaliesTable 1 }
+
+C3794MonAnomaliesEntry ::= SEQUENCE {
+    c3794MonAnomaliesIndex        TableIndex,
+    c3794MonAnomaliesBlockName    DisplayString,
+    c3794MonAnomaliesCode         Counter32,
+    c3794MonAnomaliesCodeRate     RatioPercentage,
+    c3794MonAnomaliesCodeSeconds  Counter32,
+    c3794MonAnomaliesFas          Counter32,
+    c3794MonAnomaliesFasRate      RatioPercentage,
+    c3794MonAnomaliesFasSeconds   Counter32,
+    c3794MonAnomaliesTse          Counter32,
+    c3794MonAnomaliesTseRate      RatioPercentage,
+    c3794MonAnomaliesTseSeconds   Counter32,
+    c3794MonAnomaliesStatus       RowStatus
+}
+
+c3794MonAnomaliesIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { c3794MonAnomaliesEntry 1 }
+
+c3794MonAnomaliesBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { c3794MonAnomaliesEntry 2 }
+
+c3794MonAnomaliesCode OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of code errors detected from the beginning of the
+         monitoring session. All bits in the IEEE C37.94 Overhead and Payload 
+         frame fields are followed by their ones complement. An error code is 
+         generated when this rule is not met."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonAnomaliesEntry 3 }
+
+c3794MonAnomaliesCodeRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected code errors and the count
+         of all symbols received from the beginning of the monitoring session.
+         Definition of a 'Code' anomaly follows the explanation given in this
+         MIB within 'c3794MonAnomaliesCode'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonAnomaliesEntry 4 }
+
+c3794MonAnomaliesCodeSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one code error accounted from the
+         beginning of the current monitoring session. Definition of the 'Code'
+         anomaly follows the explanation given in this MIB within
+         'c3794MonAnomaliesCode'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonAnomaliesEntry 5 }
+
+c3794MonAnomaliesFas OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of FAS errors detected from the beginning of the
+         monitoring session. This anomaly indicates that an error has been
+         detected in the frame Header field. The IEEE C37.94 Header field 
+         is made up of 16 bits. This field carries an special known frame 
+         alignment sequence. When an error is detected in this sequence, a FAS 
+         error is declared"
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonAnomaliesEntry 6 }
+
+c3794MonAnomaliesFasRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected FAS errors and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'FAS' anomaly follows the explanation given in this
+         MIB within 'c3794MonAnomaliesFas'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonAnomaliesEntry 7 }
+
+c3794MonAnomaliesFasSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one FAS error accounted from the
+         beginning of the current monitoring session. Definition of the 'FAS'
+         anomaly follows the explanation given in this MIB within
+         'c3794MonAnomaliesFas'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonAnomaliesEntry 8 }
+
+c3794MonAnomaliesTse OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Test Sequence Errors (TSE) detected from the beginning
+         of the monitoring session. One TSE is equivalent to a single bit
+         difference between the transmitted and the received test pattern
+         (PRBS or other)."
+    ::= { c3794MonAnomaliesEntry 9 }
+
+c3794MonAnomaliesTseRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected TSE anomalies and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'TSE' anomaly follows the explanation given in this
+         MIB within 'c3794MonAnomaliesTse'."
+    ::= { c3794MonAnomaliesEntry 10 }
+
+c3794MonAnomaliesTseSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one TSE anomaly accounted from
+         the beginning of the current monitoring session. Definition of the
+         'TSE' anomaly follows the explanation given in this MIB within
+         'c3794MonAnomaliesTse'."
+    ::= { c3794MonAnomaliesEntry 11 }
+
+c3794MonAnomaliesStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'c3794MonAnomaliesTable'. Enables dynamic 
+         creation / deletion of table entries in the current table. Information 
+         contained in the table entry may not be available for read / write 
+         operations if the status column is set to something different to 
+         'active'. See the REFERENCEd documents to get more information about 
+         the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { c3794MonAnomaliesEntry 12 }
+
+--
+--  C3.794 Defects result table
+--
+
+c3794MonDefectsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF C3794MonDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a table that contains information about defects declared in
+         IEEE C37.94 signals received by the agent test ports. A defect is 
+         declared when the density of anomalies has reached a level where the 
+         ability to perform a required function has been interrupted. 
+         Defects are usually persistent indications of a fault that clear 
+         only when the triggering condition has been resolved.
+
+         In the particular case of IEEE C37.94 transmission systems, typical 
+         examples of defects are the loss of signal (LOS), alarm indication 
+         signal (AIS) and the remote defect indication (RDI)."
+    ::= { c3794Monitor 3 }
+
+c3794MonDefectsEntry OBJECT-TYPE
+    SYNTAX            C3794MonDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing IEEE C37.94 defect statistics corresponding to a
+         particular monitoring block."
+    INDEX { c3794MonDefectsIndex }
+    ::= { c3794MonDefectsTable 1 }
+
+C3794MonDefectsEntry ::= SEQUENCE {
+    c3794MonDefectsIndex          TableIndex,
+    c3794MonDefectsBlockName      DisplayString,
+    c3794MonDefectsLos            TruthValue,
+    c3794MonDefectsLosSeconds     Counter32,
+    c3794MonDefectsAis            TruthValue,
+    c3794MonDefectsAisSeconds     Counter32,
+    c3794MonDefectsAct            TruthValue,
+    c3794MonDefectsActSeconds     Counter32,
+    c3794MonDefectsRdi            TruthValue,
+    c3794MonDefectsRdiSeconds     Counter32,
+    c3794MonDefectsLss            TruthValue,
+    c3794MonDefectsLssSeconds     Counter32,
+    c3794MonDefectsAll0           TruthValue,
+    c3794MonDefectsAll0Seconds    Counter32,
+    c3794MonDefectsAll1           TruthValue,
+    c3794MonDefectsAll1Seconds    Counter32,
+    c3794MonDefectsSlip           TruthValue,
+    c3794MonDefectsSlipSeconds    Counter32,
+    c3794MonDefectsStatus         RowStatus
+}
+
+c3794MonDefectsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { c3794MonDefectsEntry 1 }
+
+c3794MonDefectsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { c3794MonDefectsEntry 2 }
+
+c3794MonDefectsLos OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of signal defect. This defect is detected when no signal is
+         detected in the receiver input. The 'true' status of this field
+         corresponds with the presence of the defect in the signal.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonDefectsEntry 3 }
+
+c3794MonDefectsLosSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LOS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LOS'
+         defect follows the explanation given in this MIB within 
+         'c3794MonDefectsLos'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonDefectsEntry 4 }
+
+c3794MonDefectsAis OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Alarm indication signal. It is defined as an all-1 line signal. All
+         bits in the payload field are set to '1'.
+
+         The AIS indicates a failure in the transmission source that does not
+         allow transmission of user data towards the destination. For example,
+         a regenerator that detects a LOS at its input may send an
+         AIS downstream.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonDefectsEntry 5 }
+
+c3794MonDefectsAisSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the AIS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'AIS'
+         defect follows the explanation given in this MIB within 
+         'e1MonDefectsAis'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonDefectsEntry 6 }
+
+c3794MonDefectsAct OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This defect is declared when no transitions between are detected in 
+         the transmission media. Tranmission of digital signals in an optical 
+         channel require the light intensity to change in time. A transmission 
+         media where the ACT defect is active could be considered as an idle 
+         channel.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    ::= { c3794MonDefectsEntry 7 }
+
+c3794MonDefectsActSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the ACT defect accounted from the
+         beginning of the current monitoring session. Definition of the 'ACT'
+         defect follows the explanation given in this MIB within
+         'c3794MonDefectsAct'."
+    ::= { c3794MonDefectsEntry 8 }
+
+c3794MonDefectsRdi OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Remote defect indication: The 'RDI' defect or 'yellow alarm' is sent, 
+         by setting the 'Y' bit in the IEEE C37.94 header frame field to 1.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonDefectsEntry 9 }
+
+c3794MonDefectsRdiSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'RDI' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'RDI'
+         defect follows the explanation given in this MIB within
+         'c3794MonDefectsRdi'."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794MonDefectsEntry 10 }
+
+c3794MonDefectsLss OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of sequence synchronization. This event indicates that the
+         expected test pattern does not match the actually received pattern.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    REFERENCE
+        "- ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above."
+    ::= { c3794MonDefectsEntry 11 }
+
+c3794MonDefectsLssSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LSS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LSS'
+         defect follows the explanation given in this MIB within
+         'c3794MonDefectsLss'."
+    REFERENCE
+        "- ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above."
+    ::= { c3794MonDefectsEntry 12 }
+
+c3794MonDefectsAll0 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This alarm occurs when all the user bit capacity is set to '0'.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 't1MonEnable'."
+    ::= { c3794MonDefectsEntry 13 }
+
+c3794MonDefectsAll0Seconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'All 0' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'All 0'
+         defect follows the explanation given in this MIB within 
+         't1MonDefectsAll0'."
+    ::= { c3794MonDefectsEntry 14 }
+
+c3794MonDefectsAll1 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This alarm occurs when all the user bit capacity is set to '1'.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    ::= { c3794MonDefectsEntry 15 }
+
+c3794MonDefectsAll1Seconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'All 1' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'All 1'
+         defect follows the explanation given in this MIB within        
+         'c3794MonDefectsAll1'."
+    ::= { c3794MonDefectsEntry 16 }
+
+c3794MonDefectsSlip OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Either one bit is missing or repeated in the received test pattern.
+         This error is usually related with timing problems within the network.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'c3794MonEnable'."
+    ::= { c3794MonDefectsEntry 17 }
+
+c3794MonDefectsSlipSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'Slip' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'Slip'
+         defect follows the explanation given in this MIB within 
+         'c3794MonDefectsSlip'."
+    ::= { c3794MonDefectsEntry 18 }
+
+c3794MonDefectsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'c3794MonDefectsTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { c3794MonDefectsEntry 19 }
+END

@@ -1,0 +1,2368 @@
+ATSL-PSN-GENERATOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Ethernet / IP traffic generation.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus, MacAddress                                 FROM SNMPv2-TC
+    InetAddressIPv4                                       FROM INET-ADDRESS-MIB
+    atslGeneral, TableIndex, RatioPercentage,
+    Encapsulation, VlanIdentifier, PriorityCodePoint,
+    Real32, TestPattern, Word16, Unsigned8, MplsLabel,
+    DiffServCodePoint, Word32                             FROM ATSL-MIB;
+
+psnGenerator MODULE-IDENTITY
+    LAST-UPDATED "201702010000Z" -- 1 February, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB contains definition of objects required by Ethernet / IP / UDP
+         test ports to generate traffic. Some of the settings described here
+         may be applied to the receiver as well.
+
+         Scalars
+
+         - 'psnGenEnable': Starts / Stops frame generation in the managed
+           entity. The action starts traffic generation in all the available
+           blocks. The number of generation blocks may not be the same for
+           different managed entities and it may be that there is only one
+           generation block for some of them.
+
+         - 'psnGenMode': Configures the general operation mode for the agent.
+           It determines the functionality, supported frame formats, protocols
+           and tests. Some configuration fields defined by several OIDs defined
+           in this MIB may  not be available in some configuration modes. The
+           operation mode usually involves automatic re-configuration of all the
+           available test ports in the agent.
+
+         - 'psnGenControl':This OID can be used by the manager to decide how
+           traffic generation is controlled. There are two possibilities,
+           'custom' generation leaves the manager with full control about
+           traffic generation, on the other hand, 'external' generation can be
+           used to leave traffic generation to an application other than the
+           default traffic generator.
+
+         Tables
+         
+         - 'psnGenModeTable': This table can be used for test port management in
+           the agent. It contains one row per each test port and it can be used
+           to enable or disable the ports, configure them in different operation
+           modes and  set their basic transmission parameters such as addresses
+           and default encapsulations assigned to them. Port modes available
+           depend on the global operation mode configured with 'psnGenMode'. The
+           port mode configured in this table, also may enable or disable
+           different configuration settings in this or other tables.
+
+         - 'psnGenPatternTable': This is a table that enables the manager to
+           select between different bit patterns to be used in L1 BER tests.
+           The advantage of L1 test patterns is that they are processed as a
+           byte stream by the analyser (as opposed to a frame sequence). The
+           result is a more accurate description of the transmission performance
+           in terms of bit errors. On the other hand, L1 test patterns do not
+           contain source and destination addresses or CoS labels to force the
+           stream to follow an specific path in the network. Moreover, there is
+           not a 'bandwidth profile' you can use with L1 patterns, they are just
+           byte sequences. At best, when they are carried within an Ethernet
+           envelope, they use the  whole capacity in the transmission interface.
+
+         - 'psnGenEthTable': This is a table that enables the agent to generate
+           custom Ethernet frames in each of the available traffic generation
+           blocks. Most of the Ethernet frame fields are available for
+           configuration in through this table. Before configuring the fields,
+           it is necessary to tell to the agent which frame structure is going
+           to be used for traffic. This is done through the 'psnGenEthFrameType'
+           and the 'psnGenEthEncapsulation' OIDs. Once the frame structure is
+           decided, the manager has to set both the value for the different
+           frame fields and the frame length. All three different settings
+           (framing, frame fields values, and frame length configuration) are
+           available from this table. Ethernet frame generation requires the
+           global mode 'psnGenMode' to be configured to 'ethEndpoint' or
+           'ipEndpoint'.
+
+         - 'psnGenIpMplsTable': This table configures the IP / MPLS label stack
+           in a traffic generation block associated with a test port or traffic
+           stream. IP / MPLS is a technology that implements transmission based
+           on virtual circuits in IP networks. MPLS virtual circuits, known as
+           Label Switched Paths (LSPs) enable the network administrators to
+           build advanced traffic engineering mechanisms in their domains.
+           Another advantage,of MPLS is that it speeds up IP packet switching in
+           routers by separating the functions of route selection and packet
+           forwarding into two planes. Currently, there are several MPLS flavours
+           and profiles available with different applications. For example
+           pseudo-wire technology use an specific MPLS encapsulation without IP
+           and MPLS-TP is designed to be used in packet-switched transport
+           networks and replace TDM technologies like PDH and SDH. This table
+           is, up to some point, independent of the MPLS flavour and it has been
+           written with the original RFC 3031 specification in mind. The label
+           format is specified in RFC 3032. Generation of IP / MPLS traffic
+           requires 'psnGenMode' to be configured to 'ipEndpoint'.
+
+         - 'psnGenIpTable': This table enables configuration of the IPv4
+           datagram in test ports or any traffic generation block. IPv4 is
+           Layer 3 protocol that enables communication with remote networks. The
+           table includes configuration of the UDP protocol which operates at
+           the transpoprt layer or Layer 4. Without a Network layer, all the
+           Ethernet traffic generated by the agent would be unable lo leave the
+           local network and reach remote networks. The Network Layer, or Layer
+           3, provides end-to-end connectivity between stations that can use
+           heterogeneous underlying technologies and they are not necessarily
+           attached to the same network. Routers are devices that are designed
+           to manage Layer 3 protocols and they implement data forwarding based
+           on routing tables. The Internet Protocol (IP) is the most popular
+           Layer 3 protocol. It was conceived by the U.S. Department of Defence
+           (DoD) during the cold war to facilitate communication between
+           dissimilar computer systems and it is a reliable technology. IP
+           interconnects public or private autonomous systems providing a
+           connectionless service. There are two IP protocol versions (IPv4 and
+           IPv6). IPv4 addresses can be defined as a subset of the IPv6
+           addressing space but IPv4 and IPv6 can be regarded as different and
+           incompatible network protocols in any other sense. The 
+           'psnGenIpTable' is compatible with version four of the IP protocol
+           (IPv4). The correct value of 'psnGenMode' for IPv4 packet generation
+           is 'ipEndpoint'. IPv4 traffic generation requires the user to set the
+           lower transmission layers in the protocol stack, including the
+           physical and MAC layers.
+
+         - 'psnGenBandwidthTable': In the same way that 'psnGenEthTable' and
+           'psnGenIpTable' configure the information structure and header
+           content for each available traffic generation block,
+           'psnGenBandwidthTable' sets how many frames are transmitted and
+           how transmission events are distributed in time.  The simplest is
+           to generate frames with a constant bit rate specified in frames
+           per second, bits per second or as a percentage of the total
+           transmission channel capacity.  As an alternative, the
+           'psnGenBandwidthTable' enables the manager to configure more
+           advanced generation profiles including periodic burst generation,
+           ramp generation or random transmission with Poisson statistics.
+
+         - 'psnGenPayloadTable': This table configures the payload format and
+           content of traffic internally generated by the agent. Most of the
+           agents with traffic generation capabilities generate synthetic
+           payloads with different formats that enable them to carry out
+           different kinds of measurements including Bit Error Rate (BER), 
+           latency, frame loss and various other derived metrics.
+
+         - 'psnGenLoopbackTable': The 'psnGenLoopbackTable' configures the
+           traffic reflector function avaiable in some agents. When the loopback
+           mode is configured in the agent the traffic it receives is forwarded
+           toward their originator. This is very useful in many test and
+           measurement applications where the traffic generator is waiting to
+           receive the test traffic so that it can correlate the frames with
+           the original ones.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - Ether.Giga Gigabit Ethernet Tester.
+         - Ether.Sync Ethernet Syncronization Tester
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION "201702010000Z" -- 1 February, 2017
+    DESCRIPTION
+    	"The 'psnGenMode' OID has been marked as deprecated." 
+    REVISION     "201408050000Z" -- 5 August, 2014
+    DESCRIPTION
+        "Moved the PhyTable to a separate ATSL-PSN-PORT-CONFIG-MIB"
+    REVISION     "201408010000Z" -- 1 August, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 16 }
+
+--
+-- Textual conventions
+--
+
+EndpointMode ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the different operation modes that may be supported by the
+         agent. The available global operation modes are:
+
+         - 'l1endpoint': This is a mode specifically conceived for physical
+           layer BER tests. When the agent is configured in this mode is
+           unable to generate user-configurable frames but it can still
+           generate and analyse the PCS codes required for BER testing at L1.
+
+         - 'ethEndpoint': If the agent is configured in Ethernet endpoint mode,
+           then it emulates an Ethernet network terminating point. In this mode
+           the generator sends a test signal made up of Ethernet frames to the
+           DUT / SUT and the analyser receives new Ethernet frames from the DUT
+           / SUT. This mode can be used for continuity / transparency testing,
+           L2-L4 BER testing and performance (SLA, eSAM, RFC 2544) measurements
+           in Ethernet interfaces. You can use this operation mode if you have
+           IP over Ethernet but you don't care about the network protocol used
+           in the network.
+
+         - 'ipEndpoint': If the tester is configured in IP endpoint mode, then
+           it emulates an IP network terminating point. In this mode the
+           generator sends a test signal made up of IPv4 frames to the DUT /
+           SUT and the analyser receives new IPv4 / IPv6 frames from the DUT /
+           SUT. This mode is used for continuity / transparency testing, BER
+           testing and performance (SLA, eSAM, RFC 2544) measurements in IP /
+           Ethernet interfaces.
+
+         - 'external': This operation mode enables the agent to implement
+           external operation modes. These modes are beyond this MIB and may
+           correspond to different specific measurements like cable testing,
+           advanced protocol generation, traffic replay or any other.
+           
+         Note that this OID is deprecated, as the main mode of operation
+         must be selected in the 'mfFuncTable' defined in the
+         ATSL-MULTIFUNCTION-MIB.  Setting the operation mode directly in
+         this OID may result in an inconsistent behaviour of the agent,
+         especially in those testers that implement multiple functions,
+         apart from the PSN function."
+
+    SYNTAX            INTEGER {
+                          l1Endpoint (0),
+                          ethEndpoint (1),
+                          ipEndpoint (2),
+                          external (3)
+                      }
+
+PortMode ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Configures the operation mode for the test port. The operation mode
+         specifies the functions allowed for that specific port including,
+         data transmission, data reception, data forwarding or any other
+         permitted for the current configuration options. Only a reduced set
+         of configuration options may be available in some ports or some agents:
+
+         - 'disabled': Both the port transmitter and receiver are disabled.
+           Use this mode if you are not going to use the corresponding port and
+           you want to extend the operation time with batteries in the managed
+           entity to the maximum
+
+         - 'txrx': Both transmission and reception are enabled in the port. The
+           transmitter is connected to the internal test traffic generator. This
+           is the port mode to be used most of the times for testing in endpoint
+           mode.
+
+         - 'monitor': The port is configured in promiscuous monitoring mode and
+           the port transmitter is disabled. All kinds of traffic generation
+           are disabled in Monitor mode but the equipment can still reply to
+           some ARP and ICMP requests for technical reasons. Use this mode if
+           you want to get statistics about the network traffic, including
+           traffic from remote test ports units but you don't want to disturb
+           the network with any test traffic internally generated by the unit.
+
+         - 'loopback': The port receiver is connected to the transmitter so that
+           part or all the received frames are sent towards the origin. This
+           port mode is used guarantee the continuity of the test payload or
+           pattern to in two-way tests.
+
+         - 'cable': This is a mode specifically used for cable tests. It is used
+           if 'psnGenMode' is configured to execute a cable test. The Cable test
+           port mode disables transmission of Ethernet frames or IP packets. The
+           'link' port mode is not directly available for configuration. It is
+           automatically configured when the global operation mode of the agent
+           is configured to execute cable tests.
+
+         - 'link': This is a mode specifically used for cable tests. It may be
+           used by some test ports when 'psnGenMode' is set to execute a cable
+           test in the managed entity . The 'link' port mode disables
+           transmission of Ethernet frames or IP packets. The only function of
+           the Link port mode is to supply link to enable other ports to measure
+           the all cable parameters. The 'link' port mode is not directly
+           available for configuration. It is automatically configured when the
+           global operation mode of the agent is configured to execute cable
+           tests."
+    SYNTAX            INTEGER {
+                          disabled (0),
+                          txrx (1),
+                          monitor (2),
+                          loopback (3),
+                          cable (4),
+                          link (5)
+                      }
+
+FrameType ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the available frame structures supported by the agent test
+         ports. Currently, only one frame type is available through this test
+         convention, the DIX frame, also known as Ethernet II or Ethernet
+         version 2. This is the most common frame structure available in
+         enterprise and service provider networks today. The value that encodes
+         the DIX frame in this textual convention is 'dix'."
+    SYNTAX            INTEGER {
+                          dix (0)
+                      }
+
+--
+-- Top level module structure
+--
+
+psnGenControl      OBJECT IDENTIFIER ::= { psnGenerator 1 }
+
+--
+-- Generation enable / disable control group
+--
+
+psnGenEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops frame generation in the managed entity. The action
+         starts traffic generation in all the available blocks. The number of
+         generation blocks may not be the same for different managed entities
+         and it may be that there is only one generation block for some of
+         them."
+    ::= { psnGenControl 1 }
+
+psnGenMode OBJECT-TYPE
+    SYNTAX            EndpointMode
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the general operation mode for the agent. It determines the
+         functionality, supported frame formats, protocols and tests. Some
+         configuration fields defined by several OIDs defined in this MIB may
+         not be available in some configuration modes.
+
+         The operation mode usually involves automatic re-configuration of all
+         the available test ports in the agent."
+    ::= { psnGenControl 2 }
+
+psnGenTrafficControl OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          custom(0),
+                          external(1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This OID can be used by the manager to decide how traffic generation
+         is controlled. There are two possibilities, 'custom' generation leaves
+         the manager with full control about traffic generation, on the other
+         hand, 'external' generation can be used to leave traffic generation to
+         an application other than the default traffic generator. A more
+         detailled explanation of the accepted configurations for the traffic
+         control field is as follows:
+
+         - 'custom': All frame structure and content fields (which make sense
+           in the selected configuration) are available to generate traffic.
+           Bandwidth profile controls can be used to generate custom traffic
+           with different distributions and bit rates. Test payloads are freely
+           available to carry out different kinds of tests.
+
+         - 'external': The control of some or all traffic generation functions
+           is transferred to an external application. This application, may 
+           want to transfer traffic at specific bit rates or use special
+           source and destination addresses. This setting can be used to set
+           automatic tests involving traffic geration in the agent such as the
+           RFC 2544 or the ITU-T Y.1564 test."
+    ::= { psnGenControl 3 }
+
+--
+--  Mode configuration table
+--
+
+psnGenModeTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenModeEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table can be used for test port management in the agent. It
+         contains one row per each test port and it can be used to enable
+         or disable the ports, configure them in different operation modes and
+         set their basic transmission parameters such as addresses and default
+         encapsulations assigned to them.
+
+         Port modes available depend on the global operation mode configured
+         with 'psnGenMode'. The port mode configured in this table, also
+         may enable or disable different configuration settings in this or 
+         other tables."
+    ::= { psnGenerator 2 }
+
+psnGenModeEntry OBJECT-TYPE
+    SYNTAX            PsnGenModeEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { psnGenModeIndex }
+    ::= { psnGenModeTable 1 }
+
+PsnGenModeEntry ::= SEQUENCE {
+    psnGenModeIndex               TableIndex,
+    psnGenModeBlockName           DisplayString,
+    psnGenModePort                PortMode,
+    psnGenModeMacLocal            MacAddress,
+    psnGenModeEncapsulationLocal  Encapsulation,
+    psnGenModeCvidLocal           VlanIdentifier,
+    psnGenModeCpcpLocal           PriorityCodePoint,
+    psnGenModeDhcpEnabled         TruthValue,
+    psnGenModeIpv4AddressStatic   InetAddressIPv4,
+    psnGenModeIpv4MaskStatic      InetAddressIPv4,
+    psnGenModeIpv4DnsStatic       InetAddressIPv4,
+    psnGenModeIpv4GatewayStatic   InetAddressIPv4,
+    psnGenModeIpv4AddressLeased   InetAddressIPv4,
+    psnGenModeIpv4MaskLeased      InetAddressIPv4,
+    psnGenModeIpv4DnsLeased       InetAddressIPv4,
+    psnGenModeIpv4GatewayLeased   InetAddressIPv4,
+    psnGenModeStatus              RowStatus
+}
+
+psnGenModeIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { psnGenModeEntry 1 }
+
+psnGenModeBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenModeEntry 2 }
+
+psnGenModePort OBJECT-TYPE
+    SYNTAX            PortMode
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the current operation mode for the test port. There is one
+         of this fields for each port in the agent. The port modes available
+         for each port may not be the same or they may depend on the global
+         operation mode configured in 'psnGenMode'. The 'psnGenModePort' is a
+         field that contains a 'PortMode' variable. The configuration values for
+         the port is a subset of the values defined by this textual convention."
+    ::= { psnGenModeEntry 3 }
+
+psnGenModeMacLocal OBJECT-TYPE
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This is a read-only field that displays the factory MAC address
+         assigned to the port. The traffic generator may support emulation of
+         MAC traffic from sources other than the factory MAC, but the address
+         displayed here is the real, unique MAC address used in default
+         configuration."
+    REFERENCE 
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnGenModeEntry 4 }
+
+psnGenModeEncapsulationLocal OBJECT-TYPE
+    SYNTAX            Encapsulation
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This fiels supplies an encapsulation for the local Ethernet / IP
+         profile. This is the default encapsulation used to transmit and receive
+         data. Some agents supporting multistream traffic generation and
+         analysis may have the ability to override the default encapsulation and
+         use an stream specific setting rather than the default port-specific
+         configuration."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenModeEntry 5 }
+
+psnGenModeCvidLocal OBJECT-TYPE
+    SYNTAX            VlanIdentifier
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "VLAN identifier assigned to tagged frames (IEEE 802.1Q) or C-VLAN
+         identifier for double tagged frames (IEEE 802.1ad, Q-in-Q). Any
+         value between 0 and 4096 is allowed for this field.
+
+         This is a port specific setting that may be overriden by an stream
+         specific setting in agents supporting multistream traffic generation
+         and analysis."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks."
+    ::= { psnGenModeEntry 6 }
+
+psnGenModeCpcpLocal OBJECT-TYPE
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "3-bit class of service (CoS) field defined to set frame groups with
+         different priorities or to provide specific treatments to special
+         frames within a network or an administrative domain. This field is
+         carried by the Q-tag of Ethernet frames with a single tag or by the
+         C-tag of Ethernet frames with two tags.
+
+         Any value from 0 to 7 is allowed for this field. Specific actions to be
+         carried out on frames with different CoS labels depend on the network
+         and the service provider.
+
+         This is a port specific setting that may be overriden by an stream
+         specific setting in agents supporting multistream traffic generation
+         and analysis."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks."
+    ::= { psnGenModeEntry 7 }
+
+psnGenModeDhcpEnabled OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the mechanism used to set the test port local IP address
+         mask, gateway address and DNS server. If Use DHCP is enabled, the local
+         IP profile is configured automatically using a DHCP server installed in
+         the network. Otherwise, the user has to enter the IP address, mask,
+         default gateway and DNS address by hand."
+    REFERENCE 
+        "- RFC 2131 'Dynamic Host Configuration Protocol'."
+    ::= { psnGenModeEntry 8 }
+
+psnGenModeIpv4AddressStatic OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Static IP address assigned to the interface in a decimal four dotted
+         format. This IP address is copied to the source address field of
+         packets internally generated by the agent. This is a port specific
+         setting that may be overriden by an stream specific setting in agents
+         supporting multistream traffic generation and analysis. However, agents
+         may still use the local address in some protocols if they are not
+         supported by the stream traffic generators. Agents may be unable to
+         reply to ARP requests directed to addresses other than the local
+         address configured in this field.
+
+         The address is entered in decimal, four-dotted format. Any address
+         between 0.0.0.0 and 255.255.255.255 is admitted as a source IPv4
+         address.
+
+         This setting makes sense only if Use DHCP is not enabled."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenModeEntry 9 }
+
+psnGenModeIpv4MaskStatic OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Subnet mask used to identify the network address bits and host address
+         bits in the Static IPv4 address. The subnet mask is entered in decimal,
+         four-dotted format and it must belong to the same network (same network
+         bits) than the current port.
+         
+         The static addressing is used only if no dynamic address configuration
+         like DHCP is used for the port."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenModeEntry 10 }
+
+psnGenModeIpv4DnsStatic OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "IP address corresponding to the host used for domain name resolution.
+         A DNS server allows the user to identify destinations by alphanumeric
+         domain names rather than numeric IP addresses. The DNS address has to
+         be entered in decimal, four-dotted format.
+
+         This setting makes sense only if Use DHCP is not enabled."
+    REFERENCE 
+        "- RFC 1035 'Domain Names - Implementation and Specification."
+    ::= { psnGenModeEntry 11 }
+
+psnGenModeIpv4GatewayStatic OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "IP address corresponding to the network device used to send IP packets
+         to external networks. The gateway address is configured in decimal,
+         four-dotted format.
+
+         This setting makes sense only if Use DHCP is not enabled."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenModeEntry 12 }
+
+psnGenModeIpv4AddressLeased OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current DHCP-assigned IPv4 address in a decimal four dotted format.
+         This is a read-only field that cannot be directly configured by the
+         SNMP managers.
+
+         This setting makes sense only if Use DHCP is enabled."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'.
+
+         - RFC 2131 'Dynamic Host Configuration Protocol'."
+    ::= { psnGenModeEntry 13 }
+
+psnGenModeIpv4MaskLeased OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current DHCP-assigned network mask in a decimal four dotted format.
+         This is a read-only field that cannot be directly configured by SNMP
+         managers.
+
+         This setting makes sense only if Use DHCP is enabled."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'.
+
+         - RFC 2131 'Dynamic Host Configuration Protocol'."
+    ::= { psnGenModeEntry 14 }
+
+psnGenModeIpv4DnsLeased OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current DHCP-assigned DNS server in a decimal four dotted format. This
+         is a read-only field that cannot be directly configured by SNMP
+         managers.
+
+         This setting makes sense only if Use DHCP is enabled."
+    REFERENCE 
+        "- RFC 1035 'Domain Names - Implementation and Specification.
+
+         - RFC 2131 'Dynamic Host Configuration Protocol'."
+    ::= { psnGenModeEntry 15 }
+
+psnGenModeIpv4GatewayLeased OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current DHCP-assigned default gateway in a decimal four dotted format.
+         This is a read-only field that cannot be directly configured by SNMP
+         managers.
+
+         This setting makes sense only if Use DHCP is enabled."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'.
+
+         - RFC 2131 'Dynamic Host Configuration Protocol'."
+    ::= { psnGenModeEntry 16 }
+
+psnGenModeStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenModeTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenModeEntry 17 }
+
+--
+--  Physical BER test pattern configuration table
+--
+
+psnGenPatternTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenPatternEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a table that enables the manager to select between different
+         bit patterns to be used in L1 BER tests. The advantage of L1 test
+         patterns is that they are processed as a byte stream by the analyser
+         (as opposed to a frame sequence). The result is a more accurate
+         description of the transmission performance in terms of bit errors. On
+         the other hand, L1 test patterns do not contain source and destination
+         addresses or CoS labels to force the stream to follow an specific path
+         in the network. Moreover, there is not a 'bandwidth profile' you can
+         use with L1 patterns, they are just byte sequences. At best, when they
+         are carried within an Ethernet envelope, they use the  whole capacity
+         in the transmission interface."
+    ::= { psnGenerator 3 }
+
+psnGenPatternEntry OBJECT-TYPE
+    SYNTAX            PsnGenPatternEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { psnGenPatternIndex }
+    ::= { psnGenPatternTable 1 }
+
+PsnGenPatternEntry ::= SEQUENCE {
+    psnGenPatternIndex            TableIndex,
+    psnGenPatternBlockName        DisplayString,
+    psnGenPattern                 TestPattern,
+    psnGenPatternStatus           RowStatus
+}
+
+psnGenPatternIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { psnGenPatternEntry 1 }
+
+psnGenPatternBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenPatternEntry 2 }
+
+psnGenPattern OBJECT-TYPE
+    SYNTAX            TestPattern
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a Layer 1 BER patterns in the test port. The Physical Layer
+         BER or L1 BER test measures the same parameters than the framed BER
+         test but it is based on much simpler test patterns. Some patterns carry
+         a minimum envelope like a preamble, an FCS or an IFG that enable some
+         network elements to process the data stream in the same way than a
+         framed flow.
+
+         L1 pattern generation requires the global mode 'psnGenMode' to be
+         configured to 'l1Endpoint'."
+    ::= { psnGenPatternEntry 3 }
+
+psnGenPatternStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenPatternTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenPatternEntry 4 }
+
+--
+--  Frame layer configuration table
+--
+
+psnGenEthTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenEthEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a table that enables the agent to generate custom Ethernet
+         frames in each of the available traffic generation blocks. Most of the
+         Ethernet frame fields are available for configuration in through this
+         table. Before configuring the fields, it is necessary to tell to the
+         agent which frame structure is going to be used for traffic. This is
+         done through the 'psnGenEthFrameType' and the 'psnGenEthEncapsulation'
+         OIDs. Once the frame structure is decided, the manager has to set both
+         the value for the different frame fields and the frame length. All
+         three different settings (framing, frame fields values, and frame
+         length configuration) are available from this table.
+
+         Ethernet frame generation requires the global mode 'psnGenMode' to be
+         configured to 'ethEndpoint' or 'ipEndpoint'."
+    ::= { psnGenerator 4 }
+
+psnGenEthEntry OBJECT-TYPE
+    SYNTAX            PsnGenEthEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { psnGenEthIndex }
+    ::= { psnGenEthTable 1 }
+
+PsnGenEthEntry ::= SEQUENCE {
+    psnGenEthIndex                TableIndex,
+    psnGenEthBlockName            DisplayString,
+    psnGenEthFrameType            FrameType,
+    psnGenEthMtu                  Unsigned32,
+    psnGenEthFrameSize            Unsigned32,
+    psnGenEthEncapsulation        Encapsulation,
+    psnGenEthMacSrcAddressOrigin  INTEGER,
+    psnGenEthMacSrcAddress        MacAddress,
+    psnGenEthMacDstAddressOrigin  INTEGER,
+    psnGenEthMacDstAddress        MacAddress,
+    psnGenEthMacDstAddressArp     MacAddress,
+    psnGenEthMacDstAddressRange   Unsigned32,
+    psnGenEthEthertype            Word16,
+    psnGenEthCvid                 VlanIdentifier,
+    psnGenEthCpcp                 PriorityCodePoint,
+    psnGenEthStpid                INTEGER,
+    psnGenEthSvid                 VlanIdentifier,
+    psnGenEthSpcp                 PriorityCodePoint,
+    psnGenEthDei                  TruthValue,
+    psnGenEthStatus               RowStatus
+}
+
+psnGenEthIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { psnGenEthEntry 1 }
+
+psnGenEthBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenEthEntry 2 }
+
+psnGenEthFrameType OBJECT-TYPE
+    SYNTAX            FrameType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the basic MAC frame type used for frame generation. Some
+         agents may require the same frame type in all test ports. For this
+         reason, modifying this field in one specific port may affect the
+         'psnGenEthFrameType' value in other ports."
+    ::= { psnGenEthEntry 3 }
+
+psnGenEthMtu OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "bytes"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the Maximum Transmission Unit (MTU) for the traffic
+         generation block. The MTU is the largest frame size accepted without
+         declaring the oversize defect (and usually, dropping the frame).
+         Standard IEEE 802.3 specifies an MTU of 1518 bytes for ordinary Ethernet
+         frames but 1522 is admitted for VLAN frames and 1526 valid for frames
+         carrying two VLAN tags (IEEE 802.3ad, Q-in-Q). Some switches provide
+         support for much larger frames known as jumbo frames. These frames are
+         more efficient because the ratio of header bytes to payload bytes is
+         smaller for larger frames but they are currently not accepted by any
+         international standard."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications.
+
+         - IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 4 }
+
+psnGenEthFrameSize OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "bytes"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Ethernet MAC frame size including the destination MAC address, source
+         MAC address, type / length field, payload, FCS and any VLAN tag carried
+         by the frame. Anything between 64 bytes and 10000 bytes is allowed but
+         frames longer than 1518 bytes (without VLAN tags and MPLS labels) are
+         out of the IEEE 802.3 standard. It is possible to generate frames
+         longer than the Maximum Transmission Unit (MTU) but these frames are
+         considered oversized frames when they are analysed by the tester. To
+         avoid an OverS anomaly in this case, increase the value of the MTU."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnGenEthEntry 5 }
+
+psnGenEthEncapsulation OBJECT-TYPE
+    SYNTAX            Encapsulation
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field configures the way the data is encapsulated in Ethernet
+         frames for transmission in the current stream."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications.
+
+         - IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 6 }
+
+psnGenEthMacSrcAddressOrigin OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          manual (0),
+                          external (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Establishes the origin of the source MAC address for the current
+         traffic generation block. There are two possible settings:
+
+         - 'external': The source address is assigned using an external
+            procedure. For example, some agents may set the source address MAC
+            to a unique, internally stored default MAC address assigned to the
+            port.
+
+         - 'manual: The source address is set to the value configured in
+           'psnGenEthMacSrcAddress'. Use manual MAC addresses if you want to
+            simulate traffic generated by an equipment different to the tester
+            or, in multi-stream operation, to simulate traffic transmitted from
+            different stations. Most of the times you will want to avoid
+            duplicated addresses in your network. For this reason, make sure
+            that no other equipment is using the manually configured MAC
+            address."
+    ::= { psnGenEthEntry 7 }
+
+psnGenEthMacSrcAddress OBJECT-TYPE
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Source MAC address carried by the frames generated in the current
+         traffic generation block if 'psnGenEthMacSrcAddressOrigin' is set to
+         Manual. Anything from 00:00:00:00:00:00 to ff:ff:ff:ff:ff:ff is
+         allowed."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnGenEthEntry 8 }
+
+psnGenEthMacDstAddressOrigin OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          manual (0),
+                          range (1),
+                          arp (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Establishes the origin of the destination MAC address for the current
+         traffic generation block. There are three different settings available
+         for configuration:
+
+         - 'arp': Uses the Address Resolution Protocol (IETF RFC 826) to
+           configure the destination MAC address without user intervention.
+           The ARP requires the IPv4 destination address to be previously
+           configured to work. For this reason, ARP is available only in IP
+           endpoint mode.
+
+         - 'manual': The destination address is set to the value configured in
+           Destination MAC address.
+
+         - 'range': Test data in the current generation blcok is transmitted to
+           a group of MAC addresses configured with 'psnGenEthMacDstAddress' and
+           'psnGenEthMacDstAddressRange'. Use this option if you want to deliver
+           the test data sequentially to many different destinations."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenEthEntry 9 }
+
+psnGenEthMacDstAddress OBJECT-TYPE
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Destination MAC address carried by the frames generated in the current
+         traffic generation block when 'psngenEthMacDstAddressOrigin' is set to
+         'manual'. If 'psngenEthMacDstAddressOrigin' is set to 'range', this
+         field con- tains the first destination MAC address within the range.
+
+         Any value from 00:00:00:00:00:00 to ff:ff:ff:ff:ff:ff is allowed for
+         this field."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnGenEthEntry 10 }
+
+psnGenEthMacDstAddressArp OBJECT-TYPE
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the destination MAC address when 'psnGenMode' is 'ipEndpoint'
+         and 'psnGenEthMacDstAddressOrigin' has been configured to 'arp'. The
+         ARP protocol configures the destination MAC address without user
+         intervention. For this reason this is not an editable field. If ARP
+         fails to configure de address, this field will be set to the all zero
+         MAC address: '00:00:00:00:00:00'.
+
+         - IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications.
+
+         - RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenEthEntry 11 }
+
+psnGenEthMacDstAddressRange OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the number of MAC addresses within an address range.
+
+         This control is valid only if 'psngenEthMacDstAddressOrigin' is set to
+         'range'. In this case, the ethernet frames transmitted in the current
+         stream will contain as many destination addresses as previously
+         configured in this field. 
+     
+         The destination MAC address is increased by one unit for each
+         transmitted frame starting with the value configured in 
+         'psnGenEthMacDstAddress'. If there are no more addresses left in the
+         range, transmission returns to the initial address and starts the
+         process from the beginning."
+    ::= { psnGenEthEntry 12 }
+
+psnGenEthEthertype OBJECT-TYPE
+    SYNTAX            Word16
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Ethertype value carried by the frames generated in the current traffic
+         generation block. This value is found within the Ethernet Type header
+         field in DIX / Ethernet II frames or within the LLC /SNAP header in IEEE
+         802.3 frames.
+
+         Depending on the agent configuration, 'psnGenEthEthertype' value may be
+         fixed and not settable by the user. If the 'psnGenMode' is 'ipEndpoint',
+         then 'psnGenEthEthertype' is automatically configured to 0x0800
+         (Internet Protocol, version 4). If 'psnGenPayloadType' is configured to
+         'sla' when 'psnGenMode' is 'ethEndpoint', 'psnGenEthEthertype is set to
+         0x8902 (IEEE 802.1ag / ITU-T Y.1731 OAM) to account for the special
+         structure of the Ethernet SLA measurement payload. In the same way,
+         other agent dependent restrictions for this field may apply."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnGenEthEntry 13 }
+
+psnGenEthCvid OBJECT-TYPE
+    SYNTAX            VlanIdentifier
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "VLAN identifier assigned to tagged frames (IEEE 802.1Q) or C-VLAN
+         identifier for double tagged frames (IEEE 802.1ad, Q-in-Q). In frames
+         with two VLAN tags, the C-VID usually accounts for the VLAN structure
+         corresponding to the customer network.
+
+         Any value from 0 to 4096 is allowed for this field."
+    REFERENCE
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 14 }
+
+psnGenEthCpcp OBJECT-TYPE
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "3-bit class of service (CoS) field defined to set frame groups with
+         different priorities or to provide specific treatments to special
+         frames within a network or an administrative domain. This field is
+         carried by the Q-tag of Ethernet frames with a single tag or by the
+         C-tag of Ethernet frames with two tags.
+
+         Any value from 0 to 7 is allowed for this field. Specific actions to be
+         carried out on frames with different CoS labels depend on the network
+         and the service provider."
+    REFERENCE
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 15 }
+
+psnGenEthStpid OBJECT-TYPE
+    SYNTAX            INTEGER {
+                       stpid8100 (0),
+                       stpid9100 (1),
+                       stpid9200 (2),
+                       stpid9300 (3),
+                       stpid88a8 (4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Ethertype to be associated to the S-VLAN tag in Q-in-Q frames. Four
+         different values are possible: 0x8100, 0x9100, 0x9200 and 0x9300.
+
+         In agents supporing the IEEE 802.1ad encapsulation, 'psnGenEthStpid' is
+         automatically set to 0x88a8 and this field is not editable."
+    REFERENCE
+        "- IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 16 }
+
+psnGenEthSvid OBJECT-TYPE
+    SYNTAX            VlanIdentifier
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "VLAN identifier assigned to the S-tag in double tagged frames
+         (IEEE 802.1ad, Q-in-Q). In frames with two VLAN tags, the S-VID usually
+         accounts for the VLAN structure corresponding to the service provider
+         network.
+
+         Any value within 0 to 4095 is allowed for this field."
+    REFERENCE
+        "- IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 17 }
+
+psnGenEthSpcp OBJECT-TYPE
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "3-bit class of service (CoS) field defined to set frame groups with
+         different priorities or to provide specific treatments to special
+         frames within a network or an administrative domain. This field is
+         carried by the S-tag (service provider tag) of Ethernet frames with two
+         tags.
+
+         Any value from 0 to 7 is allowed for this field. Specific actions to be
+         carried out on frames with different CoS labels depend on the network
+         and the service provider."
+    REFERENCE
+        "- IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 18 }
+
+psnGenEthDei OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a single bit field that is used to mark drop eligible frames.
+         These frames are usually dropped first when congestion is detected in a
+         network node.
+
+         The Drop eligible operator is carried within the S-tag of IEEE 802.1ad
+         frames."
+    REFERENCE
+        "- IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { psnGenEthEntry 19 }
+
+psnGenEthStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenEthTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenEthEntry 20 }
+
+--
+--  MPLS configuration table
+--
+
+psnGenIpMplsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenIpMplsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table configures the IP / MPLS label stack in a traffic generation
+         block associated with a test port or traffic stream.
+
+         IP / MPLS is a technology that implements transmission based on virtual
+         circuits in IP networks. MPLS virtual circuits, known as Label Switched
+         Paths (LSPs) enable the network administrators to build advanced
+         traffic engineering mechanisms in their domains. Another advantage,of
+         MPLS is that it speeds up IP packet switching in routers by separating
+         the functions of route selection and packet forwarding into two planes.
+         
+         Currently, there are several MPLS flavours and profiles available with
+         different applications. For example pseudo-wire technology use an
+         specific MPLS encapsulation without IP and MPLS-TP is designed to be
+         used in packet-switched transport networks and replace TDM technologies
+         like PDH and SDH. This table is, up to some point, independent of the
+         MPLS flavour and it has been written with the original RFC 3031
+         specification in mind. The label format is specified in RFC 3032.
+
+         Generation of IP / MPLS traffic requires 'psnGenMode' to be configured
+         to 'ipEndpoint'." 
+    REFERENCE 
+        "- IETF RFC 3031 'Multiprotocol Label Switching Architecture'.
+
+         - IETF RFC 3032 'MPLS Label Stack Encoding'." 
+    ::= { psnGenerator 5 }
+
+psnGenIpMplsEntry OBJECT-TYPE
+    SYNTAX            PsnGenIpMplsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular IP /
+         MPLS traffic generation block."
+    INDEX { psnGenIpMplsIndex }
+    ::= { psnGenIpMplsTable 1 }
+
+PsnGenIpMplsEntry ::= SEQUENCE {
+    psnGenIpMplsIndex             TableIndex,
+    psnGenIpMplsBlockName         DisplayString,
+    psnGenIpMplsStackSize         INTEGER,
+    psnGenIpMplsLabelBottom       MplsLabel,
+    psnGenIpMplsTrfClassBottom    PriorityCodePoint,
+    psnGenIpMplsTtlBottom         Unsigned8,
+    psnGenIpMplsLabelTop          MplsLabel,
+    psnGenIpMplsTrfClassTop       PriorityCodePoint,
+    psnGenIpMplsTtlTop            Unsigned8,
+    psnGenIpMplsStatus            RowStatus
+}
+
+psnGenIpMplsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { psnGenIpMplsEntry 1 }
+
+psnGenIpMplsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 2 }
+
+psnGenIpMplsStackSize OBJECT-TYPE
+    SYNTAX            INTEGER {
+                       disabled (0),
+                       single (1),
+                       double (2)
+                      }
+
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the size of the MPLS label stack for the current traffic
+         generation block. Both single and double label stack configurations are
+         supported by the MIB. Supported values for this field are:
+
+         - 'disabled': Disables MPLS generation in the current traffic
+           generation block.
+
+         - 'single': Enables single MPLS label generation in the current traffic
+           generation block. The user is expected to configure the bottom label,
+           traffic class and TTL for the MPLS header.
+
+         - 'double': Enables double MPLS label generation in the current traffic
+           generation block. The user is expected to configure both the top and
+           bottom label, traffic class and TTL for the MPLS headers."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 3 }
+
+psnGenIpMplsLabelBottom OBJECT-TYPE
+    SYNTAX            MplsLabel
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "MPLS label used for switching traffic in the bottom MPLS header. This
+         field should be configured  when the user has set to 'single' or
+         'double' the value of 'psnGenIpMplsStackSize'."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 4 }
+
+psnGenIpMplsTrfClassBottom OBJECT-TYPE
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Contains the traffic class identifier for the bottom MPLS header. It
+         was first thought that this field could carry the 3 Type-of-Service
+         (ToS) bits defined for Class of Service (CoS) definition in the IP
+         version 4, but currently, the ToS field is being replaced by the 6-bit
+         Differentiated Services Code Point (DSCP). This means that only a
+         partial mapping of all the possible DSCPs into this field is possible.
+
+         This field should be configured  when the user has set to 'single' or
+         'double' the value of 'psnGenIpMplsStackSize'."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 5 }
+
+psnGenIpMplsTtlBottom OBJECT-TYPE
+    SYNTAX            Unsigned8
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field contains a Time To Live (TTL) value for the bottom MPLS
+         header. The value of this field is decremented by one unit every time
+         the packet traverses an LSR. The packet is discarded if the value
+         reaches 0.
+
+         This field should be configured  when the user has set to 'single' or
+         'double' the value of 'psnGenIpMplsStackSize'."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 6 }
+
+psnGenIpMplsLabelTop OBJECT-TYPE
+    SYNTAX            MplsLabel
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field contains the MPLS label used for switching traffic in the
+         top MPLS header. This field should be configured  when the user has
+          set to 'double' the value of 'psnGenIpMplsStackSize'."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 7 }
+
+psnGenIpMplsTrfClassTop OBJECT-TYPE
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Contains the traffic class identifier for the top MPLS header. It was
+         first thought that this field could carry the 3 Type-of-Service (ToS)
+         bits defined for Class of Service (CoS) definition in the IP version 4,
+         but currently, the ToS field is being replaced by 6-bit Differentiated
+         Services Code Points (DSCP). This means that only a partial mapping of
+         all the possible DSCPs into this field is possible.
+
+         This field should be configured  when the user has set to 'double' the
+         value of 'psnGenIpMplsStackSize'."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 8 }
+
+psnGenIpMplsTtlTop OBJECT-TYPE
+    SYNTAX            Unsigned8
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field contains a Time To Live value for the top MPLS header. The
+         value of this field is decremented by one unit every time the packet
+         traverses an LSR. The packet is discarded if the value reaches 0.
+
+         This field should be configured  when the user has set to 'double' the
+         value of 'psnGenIpMplsStackSize'."
+    REFERENCE 
+        "- IETF RFC 3032 'MPLS Label Stack Encoding'."
+    ::= { psnGenIpMplsEntry 9 }
+
+psnGenIpMplsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenIpMplsTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenIpMplsEntry 10 }
+
+--
+--  Network configuration table
+--
+
+psnGenIpTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenIpEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table enables configuration of the IPv4 datagram in test ports or
+         any traffic generation block. IPv4 is Layer 3 protocol that enables
+         communication with remote networks. The table includes configuration
+         of the UDP protocol which operates at the transpoprt layer or Layer 4.
+
+         Without a Network layer, all the Ethernet traffic generated by the
+         agent would be unable lo leave the local network and reach remote
+         networks. The Network Layer, or Layer 3, provides end-to-end
+         connectivity between stations that can use heterogeneous underlying
+         technologies and they are not necessarily attached to the same network.
+         Routers are devices that are designed to manage Layer 3 protocols and
+         they implement data forwarding based on routing tables.
+
+         The Internet Protocol (IP) is the most popular Layer 3 protocol. It was
+         conceived by the U.S. Department of Defence (DoD) during the cold war
+         to facilitate communication between dissimilar computer systems and it
+         is a reliable technology. IP interconnects public or private autonomous
+         systems providing a connectionless service. There are two IP protocol
+         versions (IPv4 and IPv6). IPv4 addresses can be defined as a subset of
+         the IPv6 addressing space but IPv4 and IPv6 can be regarded as different
+         and incompatible network protocols in any other sense. The
+         'psnGenIpTable' is compatible with version four of the IP protocol
+         (IPv4). 
+
+         The correct value of 'psnGenMode' for IPv4 packet generation is
+         'ipEndpoint'. IPv4 traffic generation requires the user to set the
+         lower transmission layers in the protocol stack, including the physical
+         and MAC layers."
+    ::= { psnGenerator 6 }
+
+psnGenIpEntry OBJECT-TYPE
+    SYNTAX            PsnGenIpEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular IP
+         traffic generation block."
+    INDEX { psnGenIpIndex }
+    ::= { psnGenIpTable 1 }
+
+PsnGenIpEntry ::= SEQUENCE {
+    psnGenIpIndex                 TableIndex,
+    psnGenIpBlockName             DisplayString,
+    psnGenIpv4SrcAddressOrigin    INTEGER,
+    psnGenIpv4SrcAddress          InetAddressIPv4,
+    psnGenIpv4DstAddressOrigin    INTEGER,
+    psnGenIpv4DstAddress          InetAddressIPv4,
+    psnGenIpv4DstAddressDns       InetAddressIPv4,
+    psnGenIpv4DstAddressRange     Unsigned32,
+    psnGenIpv4DstHostName         DisplayString,
+    psnGenIpv4DiffServ            DiffServCodePoint,
+    psnGenIpv4Ttl                 Unsigned8,
+    psnGenIpUdpEnabled            TruthValue,
+    psnGenIpv4Protocol            Unsigned8,
+    psnGenIpSrcPort               Unsigned32,
+    psnGenIpDstPort               Unsigned32,
+    psnGenIpStatus                RowStatus
+}
+
+psnGenIpIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { psnGenIpEntry 1 }
+
+psnGenIpBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenIpEntry 2 }
+
+psnGenIpv4SrcAddressOrigin OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          manual (0),
+                          external (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Establishes the origin of the source IPv4 address for the current
+         traffic generation block. There are two possible settings:
+
+         - 'manual': The source address is set to the value configured in 
+           'psnGenIpv4SrcAddress'. Use 'manual' IPv4 addresses if you want to
+           simulate traffic generated by an equipment different to the tester
+           or, in multi-stream operation, to simulate traffic transmitted from
+           different hosts. Probably, you will want to avoid duplicated IP
+           addresses in your network. For this reason, make sure that no other
+           equipment is using the manually configured IPv4 address.
+
+         - 'external': The source address is assigned using an external
+           procedure. For example, some agents may support automatic IPv4 source
+           address configuration through the DHCP protocol."
+    ::= { psnGenIpEntry 3 }
+
+psnGenIpv4SrcAddress OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Source IPv4 address carried by the packets generated in the current
+         traffic generation block if 'psnGenIpv4SrcAddressOrigin' is set to
+         'manual'. The address is entered in decimal, four-dotted format. Any
+         address between 0.0.0.0 and 255.255.255.255 is admitted as a source
+         IPv4 address."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenIpEntry 4 }
+
+psnGenIpv4DstAddressOrigin OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          manual(0),
+                          range(1),
+                          dns(2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Establishes the origin of the destination IPv4 address for the current
+         traffic generation block. There are three different settings available
+         for configuration:
+
+         - 'manual': The destination address is set to the value configured in
+           'psnGenIpv4DstAddress'.
+
+         - 'range': Test data in the current stream is transmitted to a group
+           of IPv4 addresses configured with 'psnGenIpv4DstAddress' and
+           'psnGenIpv4DstAddressRange'. Use this option if you want to deliver
+           the test data sequentially to many different destinations.
+
+         - 'dns': Uses the Domain Name Service (DNS) to set the destination IP
+           address by using descriptive alphanumeric strings. The DNS mechanism
+           requires intervention of at least one DNS server. The DNS server IP
+           address has to be configured in the local port profile either
+           statically or by means DHCP."
+    ::= { psnGenIpEntry 5 } 
+
+psnGenIpv4DstAddress OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Destination IPv4 address carried by the packets generated in the
+         current stream if 'psnGenIpv4DstAddressOrigin' from is set to 'manual'.
+
+         The address is entered in decimal, four-dotted format. Any address
+         between 0.0.0.0 and 255.255.255.255 is admitted as a destination IPv4
+         address."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenIpEntry 6 }
+
+psnGenIpv4DstAddressDns OBJECT-TYPE
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Destination IPv4 address carried by the packets generated in the
+         current traffic generation block if 'psnGenIpv4DstAddressOrigin' is
+         set to 'dns'.
+
+         This is a read only field that it cannot be edited directly. It
+         displays the result of the DNS name resolution carried out with the
+         host name configured in 'psnGenIpv4DstHostName'."
+    REFERENCE 
+        "- RFC 1035 'Domain Names - Implementation and Specification'."
+    ::= { psnGenIpEntry 7 }
+
+psnGenIpv4DstAddressRange OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the number of IPv4 addresses in an address range.
+
+         This control is valid only if 'psnGenIpv4DstAddressOrigin' is set to
+         'range'. In this case, the IP datagrams transmitted in the current
+         traffic generation block will contain as many destination addresses as
+         previously configured in this field. The destination IP address is
+         increased by one unit for each transmitted frame starting with the
+         value configured in Destination IPv4 address. If there are no more
+         addresses left in the range, transmission returns to the initial
+         address and starts the process from the beginning.
+
+         Transmission of destination IPv4 address ranges is compatible with
+         transmission of destination MAC address ranges but the address number
+         of the MAC address range is always fixed to the same number that the IP
+         range. It is not possible to transmit a destination MAC address range
+         with a single IPv4 address."
+    ::= { psnGenIpEntry 8 }
+
+psnGenIpv4DstHostName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Domain name to be used as a destination if 'psnGenIpv4DstAddressOrigin'
+         is set to 'dns'.
+
+         Unlike IP addresses, domain names are easy-to-remember alphanumeric
+         strings but they have to be translated to IP addresses before any
+         packet can be sent to the destination. The translation process requires
+         the intervention of at least one DNS server. The DNS server IP address
+         has to be configured in the local port profile either statically
+         or by means DHCP."
+    REFERENCE 
+        "- RFC 1035 'Domain Names - Implementation and Specification'."
+    ::= { psnGenIpEntry 9 }
+
+psnGenIpv4DiffServ OBJECT-TYPE
+    SYNTAX            DiffServCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Differentiated Services Code Point. It is 6-bit class of service (CoS)
+         field defined to set packet groups with different priorities or to
+         provide specific treatments to special packets within a network or an
+         administrative domain.
+
+         Any value from 0 to 63 is allowed for this field. Specific actions to
+         be carried out on frames with different DSCPs depend on the network and
+         the service provider."
+    REFERENCE 
+        "- IETF RFC 2474 'Definition of the Differentiated Services Field (DS
+           Field) in the IPv4 and IPv6 Headers'."
+    ::= { psnGenIpEntry 10 }
+
+psnGenIpv4Ttl OBJECT-TYPE
+    SYNTAX            Unsigned8
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Initial Time To Live value configured in the packets transmitted in the
+         traffic generation stream.
+
+         The TTL is decreased by one unit each time it lefts a network node.
+         If the value reaches zero, then the packet is discarded. The TTL is
+         then a measure of the number of nodes the packet is allowed to
+         transverse before reaching its destination."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { psnGenIpEntry 11 }
+
+psnGenIpUdpEnabled OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables transmission of the User Datagram Protocol (UDP)
+         in the current traffic generation stream.
+
+         The UDP is defined in RFC 768 and it is a lightweight transport
+         protocol for unreliable data transmission. RFC 768 defines an
+         eight-byte fixed length header for UDP that is generated when
+         'psnGenIpUdpEnabled' is enabled in the traffic generation block.
+
+         If UDP generation is on, 'psnGenIpv4Protocol' is set to 17. This value
+         cannot be edited by the user."
+    REFERENCE 
+        "- RFC 768 'User Datagram Protocol'."
+    ::= { psnGenIpEntry 12 }
+
+psnGenIpv4Protocol OBJECT-TYPE
+    SYNTAX            Unsigned8
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field contains an 8-bit word that constitutes the protocol
+         identifier to be transmitted by the traffic generator.
+
+         TCP uses 6 as the protocol number, UDP uses 17 for the same purpose
+         and ICMP uses number 1. Some agents may not generate the correct 
+         payload structure even if the correct protocol number is configured.
+         In any case, this module does not support configuration of any
+         transport or application protocol other than UDP."
+    ::= { psnGenIpEntry 13 }
+
+psnGenIpSrcPort OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Source transport layer port transmitted in the UDP header in the
+         current traffic generation block.
+
+         Ports are service identifiers used to multiplex data from different
+         applications generated by IP hosts. This MIB provides support for
+         source port configuration in UDP streams only."
+    REFERENCE 
+        "- RFC 768 'User Datagram Protocol'."
+    ::= { psnGenIpEntry 14 }
+
+psnGenIpDstPort OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Destination transport layer port transmitted in the UDP header in the
+         current traffic generation block.
+
+         Ports are service identifiers used to multiplex data from different
+         applications generated by IP hosts. This MIB provides support for
+         source port configuration in UDP streams only."
+    REFERENCE 
+        "- RFC 768 'User Datagram Protocol'."
+    ::= { psnGenIpEntry 15 }
+
+psnGenIpStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenIpTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenIpEntry 16 }
+
+--
+--  Bandwidth configuration table
+--
+
+psnGenBandwidthTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenBandwidthEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "In the same way that 'psnGenPhyTable', 'psnGenEthTable' and
+         'psnGenIpTable' configure the information structure and header content
+         for each available traffic generation blocks, 'psnGenBandwidthTable'
+         sets how many frames are transmitted and how transmission events are
+         distributed in time. 
+
+         The simplest is to generate frames with a constant bit rate specified
+         in frames per second, bits per second or as a percentage of the total
+         transmission channel capacity. As an alternative, the
+         'psnGenBandwidthTable' enables the manager to configure more advanced
+         generation profiles, including periodic burst generation, ramp
+         generation or random transmission with Poisson statistics."
+    ::= { psnGenerator 7 }
+
+psnGenBandwidthEntry OBJECT-TYPE
+    SYNTAX            PsnGenBandwidthEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { psnGenBandwidthIndex }
+    ::= { psnGenBandwidthTable 1 }
+
+PsnGenBandwidthEntry ::= SEQUENCE {
+    psnGenBandwidthIndex          TableIndex,
+    psnGenBandwidthBlockName      DisplayString,
+    psnGenBandwidthMode           INTEGER,
+    psnGenBandwidthRate           RatioPercentage,
+    psnGenBandwidthFrameRate      Real32,
+    psnGenBandwidthBitRate        Real32,
+    psnGenBandwidthDuration       Real32,
+    psnGenBandwidthRateHigh       RatioPercentage,
+    psnGenBandwidthFrameRateHigh  Real32,
+    psnGenBandwidthBitRateHigh    Real32,
+    psnGenBandwidthDurationHigh   Real32,
+    psnGenBandwidthStepNumber     Unsigned32,
+    psnGenBandwidthStatus         RowStatus
+}
+
+psnGenBandwidthIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { psnGenBandwidthEntry 1 }
+
+psnGenBandwidthBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenBandwidthEntry 2 }
+
+psnGenBandwidthMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          disabled(0),
+                          continuous(1),
+                          burst(2),
+                          ramp(3),
+                          random(4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the traffic shape to be used by the traffic generator in the
+         current stream. There are five possible generation modes currently
+         supported:
+
+         - 'disabled': No frames are transmitted in the current stream. Use this
+           setting if you want to disable traffic generation in the current
+           traffic generation block but you don't want to globally disable
+           generation in the test port.
+
+         - 'continuous': Frames are transmitted at a constant speed to match a
+           value configured in bits per second, frames per second or a
+           percentage of the line capacity.
+
+         - 'burst': Traffic generation is distributed in periodic bursts of
+           fixed length. Between traffic bursts the user may choose to generate
+           background traffic or disable traffic generation.
+
+         - 'ramp': Generates traffic that increases its bit rate with time in
+           steps. The number of steps and step duration are configured by the
+           user. Minimum and maximum traffic generated in the ramp are user
+           configurable as well. Ramp generation is periodic. The traffic
+           generator is restarted when it finishes with the last step of an
+           specific ramp.
+
+         - 'random': The number of frames generated per time unit is a Poisson
+           random variable. This is equivalent to say that the distance between
+           two consecutively generated frames is an exponential random variable.
+           Use the Random generation profile to generate traffic that resembles
+           network traffic as much as possible."
+    ::= { psnGenBandwidthEntry 3 }
+
+psnGenBandwidthRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the transmission rate in a traffic generation block. This
+         field has different meanings depending on the value configured in
+         'psnGenBandwidthMode'. In 'continuous' generation this field configures
+         the traffic transmission rate. If 'psnGenBandwidthMode' is configured
+         to 'burst' it contains the bit rate corresponding to the low traffic
+         generation status. In 'ramp' profiles it encodes the initial
+         transmission rate and, finally, if traffic genereation is 'random',
+         this field becomes the average transmission rate.
+
+         In all traffic generation modes the transmission rate is encoded as
+         a percentage of the nominal interface capacity."
+    ::= { psnGenBandwidthEntry 4 }
+
+psnGenBandwidthFrameRate OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the transmission rate in a traffic generation block. This
+         field has different meanings depending on the value configured in
+         'psnGenBandwidthMode'. In 'continuous' generation this field configures
+         the traffic transmission rate. If 'psnGenBandwidthMode' is configured
+         to 'burst' it contains the bit rate corresponding to the low traffic
+         generation status. In 'ramp' profiles it encodes the initial
+         transmission rate and, finally, if traffic genereation is 'random',
+         this field becomes the average transmission rate.
+
+         In all traffic generation modes the transmission rate is encoded in
+         frames per second units. It is necessary to take into account that the
+         maximum value allowed for the 'psnGenBandwidthFrameRate' depends on the
+         frame size. For example, a 1000BASE-T interface cannot transmit more
+         than 1,488,095 frames/s if the frame size is 64 bytes but it can
+         transmit only 81,274 frames/s of 1518 byte frames."
+    ::= { psnGenBandwidthEntry 5 }
+
+psnGenBandwidthBitRate OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Mbit/s"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the transmission rate in a traffic generation block. This
+         field has different meanings depending on the value configured in
+         'psnGenBandwidthMode'. In 'continuous' generation this field configures
+         the traffic transmission rate. If 'psnGenBandwidthMode' is configured
+         to 'burst' it contains the bit rate corresponding to the low traffic
+         generation status. In 'ramp' profiles it encodes the initial
+         transmission rate and, finally, if traffic genereation is 'random',
+         this field becomes the average transmission rate.
+
+         In all traffic generation modes the transmission rate is encoded in
+         bit per second units. The transmission rate configured in this field is
+         Layer 2 rate. That means that the inter-frame gap, preamble and SDF
+         fields are not accounted. It is necessary to consider that the maximum
+         value allowed for the 'psnGenBandwidthBitRate' depends on the frame
+         size. For example, a 1000BASE-T interface cannot transmit more than
+         762 Mb/s if the frame size is 64 bytes but it can transmit up to
+         987 Mb/s of 1518 byte frames."
+    ::= { psnGenBandwidthEntry 6 }
+
+psnGenBandwidthDuration OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ms"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field is the duration of a low traffic transmission burst when
+         'psnGenBandwidthMode' is configured to 'burst' or the step duration in
+         'ramp' bandwidth profile. This field has no appliaction for other
+         traffic generation modes. Durations are expressed in milliseconds."
+    ::= { psnGenBandwidthEntry 7 }
+
+psnGenBandwidthRateHigh OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If 'psnGenBandwidthMode' is configured to 'burst', this field contains
+         the bit rate corresponding to the high traffic generation status. In
+         'ramp' profiles it encodes the final transmission rate. This field has
+         no appliaction for other traffic generation modes.
+
+         In all supported traffic generation modes the transmission rate is
+         encoded as a percentage of the nominal interface capacity."
+    ::= { psnGenBandwidthEntry 8 }
+
+psnGenBandwidthFrameRateHigh OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If 'psnGenBandwidthMode' is configured to 'burst', this field contains
+         the bit rate corresponding to the high traffic generation status. In
+         'ramp' profiles it encodes the final transmission rate. This field has
+         no appliaction for other traffic generation modes.
+
+         In all compatible traffic generation modes the transmission rate is
+         encoded in frames per second units. It is necessary to take into account
+         that the maximum value allowed for the 'psnGenBandwidthFrameRateHigh'
+         depends on the frame size. For example, a 1000BASE-T interface cannot
+         transmit more than 1,488,095 frames/s if the frame size is 64 bytes but
+         it can transmit only 81,274 frames/s of 1518 byte frames."
+    ::= { psnGenBandwidthEntry 9 }
+
+psnGenBandwidthBitRateHigh OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Mbit/s"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If 'psnGenBandwidthMode' is configured to 'burst', this field contains
+         the bit rate corresponding to the high traffic generation status. In
+         'ramp' profiles it encodes the final transmission rate. This field has
+         no appliaction for other traffic generation modes.
+
+         In all compatible traffic generation modes the transmission rate is
+         encoded in bit per second units. The transmission rate configured in
+         this field is Layer 2 rate. That means that the inter-frame gap,
+         preamble and SDF fields are not accounted. It is necessary to consider
+         that the maximum value allowed for the 'psnGenBandwidthBitRate' depends
+         on the frame size. For example, a 1000BASE-T interface cannot transmit
+         more than 762 Mb/s if the frame size is 64 bytes but it can transmit up
+         to 987 Mb/s of 1518 byte frames."
+    ::= { psnGenBandwidthEntry 10 }
+
+psnGenBandwidthDurationHigh OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ms"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field is the duration of a high traffic transmission burst when
+         'psnGenBandwidthMode' is configured to 'burst'. This field has no
+         appliaction for other traffic generation modes. Durations are expressed
+         in milliseconds."
+    ::= { psnGenBandwidthEntry 11 }
+
+psnGenBandwidthStepNumber OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field contains the number of steps required to achieve the final
+         transmission rate ('psnGenBandwidthBitRateHigh') when the traffic
+         generation mode is configured to 'ramp'."
+    ::= { psnGenBandwidthEntry 12 }
+
+psnGenBandwidthStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenBandwidthTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenBandwidthEntry 13}
+
+--
+--  Payload configuration table
+--
+
+psnGenPayloadTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenPayloadEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table configures the payload format and content of traffic
+         internally generated by the agent.
+
+         Most of the agents with traffic generation capabilities generate
+         synthetic payloads with different formats that enable them to carry
+         out different kinds of measurements including Bit Error Rate (BER),
+         latency, frame loss and various other derived metrics."
+    ::= { psnGenerator 8 }
+
+psnGenPayloadEntry OBJECT-TYPE
+    SYNTAX            PsnGenPayloadEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular 
+         traffic generation block."
+    INDEX { psnGenPayloadIndex }
+    ::= { psnGenPayloadTable 1 }
+
+PsnGenPayloadEntry ::= SEQUENCE {
+    psnGenPayloadIndex            TableIndex,
+    psnGenPayloadBlockName        DisplayString,
+    psnGenPayloadType             INTEGER,
+    psnGenPayloadPattern          TestPattern,
+    psnGenPayloadPatternFixed     Word32,
+    psnGenPayloadStatus           RowStatus
+}
+
+psnGenPayloadIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation block.
+         It is recommended that values are assigned contiguously starting from
+         1. The value for each block index must remain constant at least from
+         one re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { psnGenPayloadEntry 1 }
+
+psnGenPayloadBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenPayloadEntry 2 }
+
+psnGenPayloadType OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          allzeros (0),
+                          pattern (1),
+                          sla (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the payload carried by test frames generated by the current
+         traffic generation block. Test traffic may contain sequence numbers,
+         time stamps, BER test patterns or other special fields that makes it
+         possible for the analyser to compute different kinds of performance
+         metrics. There fields can only be transported by the frame payload.
+         The available configuration options for this field are listed below:
+
+         - 'allzeros': Sets the transmitted pattern to all zeroes.
+
+         - 'pattern': The payload content is set to a bit pattern suitable for
+           measuring the Bit Error Ratio (BER).
+
+         - 'sla': This is the payload to be used to measure latency, packet loss
+           and all the SLA metrics derived from them."
+    ::= { psnGenPayloadEntry 3 }
+
+psnGenPayloadPattern OBJECT-TYPE
+    SYNTAX            TestPattern
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the transmitted and expected Bit Error Rate (BER) test pattern for
+         a traffic generation and analysis block. Test patterns are usually
+         Pseudo-Random Bit Sequences (PRBS) or other bit sequences designed to
+         measure certain network parameters like the BER. "
+    ::= { psnGenPayloadEntry 4 }
+
+psnGenPayloadPatternFixed OBJECT-TYPE
+    SYNTAX            Word32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field specifies the value of a 32-bit user configurable pattern
+         that fills the payload content of the internally generated packets in
+         the current traffic generation block.
+
+         Configuration of 'psnGenPayloadPatternFixed' requires
+         'psnGenPayload' to be configured to 'user'."
+    ::= { psnGenPayloadEntry 5 }
+
+psnGenPayloadStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenBandwidthTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenPayloadEntry 6}
+
+--
+--  Loopback configuration table
+--
+
+psnGenLoopbackTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnGenLoopbackEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 'psnGenLoopbackTable' configures the traffic reflector function
+         avaiable in some agents. When the loopback mode is configured in the
+         agent the traffic it receives is forwarded toward their originator.
+         This is very useful in many test and measurement applications where
+         the traffic generator is waiting to receive the test traffic so that
+         it can correlate the frames with the original ones."
+    ::= { psnGenerator 9 }
+
+psnGenLoopbackEntry OBJECT-TYPE
+    SYNTAX            PsnGenLoopbackEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular 
+         traffic generation block."
+    INDEX { psnGenLoopbackIndex }
+    ::= { psnGenLoopbackTable 1 }
+
+PsnGenLoopbackEntry ::= SEQUENCE {
+    psnGenLoopbackIndex           TableIndex,
+    psnGenLoopbackBlockName       DisplayString,
+    psnGenLoopbackMode            INTEGER,
+    psnGenLoopbackLoopAll         TruthValue,
+    psnGenLoopbackLoopBroadcast   TruthValue,
+    psnGenLoopbackLoopIcmp        TruthValue,
+    psnGenLoopbackStatus          RowStatus
+}
+
+psnGenLoopbackIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { psnGenLoopbackEntry 1 }
+
+psnGenLoopbackBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnGenLoopbackEntry 2 }
+
+psnGenLoopbackMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          phy (0),
+                          ethernet (1),
+                          ip (2),
+                          udp (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field determines which fields within the Ethernet frame or the IP
+         datagram are swapped before forwarding. It is one of the following
+         ones:
+
+         - 'phy': Loops frames without other alteration than pulse shape
+           regeneration. This mode may cause problems if it is used in a bridged
+           network.
+
+         - 'ethernet': Swaps source and destination MAC addresses before
+           forwarding the frame. This is the correct mode to be used in bridged
+           networks.
+
+         - 'ip': It operates in the same way that the MAC loop mode but is swaps
+           source and destination IP addresses as well. This is the correct mode
+           to be used in routed networks. The 'ip' loop mode is not available if
+           'psnGenMode' is not configured in 'ipEndpoint'.
+
+         - 'udp': It works in the same way that the IP loop mode but it swaps
+           source and destination UDP ports as well. This mode can be used if
+           there are network devices working at the transport layer like for
+           example firewalls or NAT routers. The 'ip' loop mode is not available
+           if 'psnGenMode' is not configured in 'ipEndpoint'."
+    ::= { psnGenLoopbackEntry 3 }
+
+psnGenLoopbackLoopAll OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures which frames are looped in the current test port. When
+         enabled, it reflects all frames received in the test port but if
+         disabled it only reflects frames matching certain filtering rules. All
+         non-matching frames are discarded. 
+
+         Use this option if you need a tight control on the looped frames.
+         Selection rules used by the loopback function are beyound the
+         specification of this MIB."
+    ::= { psnGenLoopbackEntry 4 }
+
+psnGenLoopbackLoopBroadcast OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Chooses whether to loop Ethernet broadcast frames or not. If broadcast
+         loop is disabled, all frames with destination MAC address set to
+         FF:FF:FF:FF:FF:FF are discarded.
+
+         Use this setting if you want to avoid Ethernet broadcast frames to
+         proliferate and potentially flood the network."
+    ::= { psnGenLoopbackEntry 5 }
+
+psnGenLoopbackLoopIcmp OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Chooses whether to loop ICMP packets. If ICMP loop is disabled, all
+         ICMP packets (IP protocol number 1) will be discarded.
+
+         Use this setting to avoid ICMP packet proliferation in the network."
+    ::= { psnGenLoopbackEntry 6 }
+
+psnGenLoopbackStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnGenLoopbackTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnGenLoopbackEntry 7}
+END

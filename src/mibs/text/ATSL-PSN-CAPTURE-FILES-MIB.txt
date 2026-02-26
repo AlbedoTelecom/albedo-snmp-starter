@@ -1,0 +1,585 @@
+ATSL-PSN-CAPTURE-FILES-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Packet Capture File Management.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter64, Gauge32      FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus                  FROM SNMPv2-TC
+    TableIndex                                            FROM ATSL-MIB
+	fileClasses, FileAction, FileOpsResult                FROM ATSL-FILEMGR-MIB;
+
+psnCaptFiles MODULE-IDENTITY
+    LAST-UPDATED "201404280000Z" -- 28 April, 2014
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+
+    DESCRIPTION
+        "This MIB module provides resources for browsing, post-filtering and
+		  basic file management operations on packet capture files.  These
+		  files contain the packets captured from a packet-switched network
+		  by the test unit, during a time interval.
+
+		  Since the volume of these capture files may be very large, a
+		  post-filtering mechanism is provided so that remote clients can
+		  download certain portions of the whole capture, according to
+		  several filter conditions, such as time sub-interval or the
+		  streams that captured the packets.
+		"
+
+    REVISION     "201404280000Z" -- 28 April, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { fileClasses 3 }
+
+--
+--  Table of Capture files (listing)
+--
+
+psnCaptFilesListTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnCaptFilesListEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table lists all capture files present in the test unit
+		 or in any removable device attached to the unit.  Each row of the
+		 table represents a different file."
+
+    ::= { psnCaptFiles 1 }
+
+psnCaptFilesListEntry OBJECT-TYPE
+    SYNTAX            PsnCaptFilesListEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information for each capture file
+		 stored in the test unit or in a removable storage unit attached to
+		 it."
+
+    INDEX { psnCaptFilesListIndex }
+    ::= { psnCaptFilesListTable 1 }
+
+PsnCaptFilesListEntry ::= SEQUENCE {
+    psnCaptFilesListIndex          TableIndex,
+    psnCaptFilesListName           DisplayString,
+    psnCaptFilesListDevice         DisplayString,
+    psnCaptFilesListCreationDate   DisplayString,
+    psnCaptFilesListSize           Counter64,
+    psnCaptFilesListURL            DisplayString,
+    psnCaptFilesListStatus         RowStatus
+}
+
+psnCaptFilesListIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each file in the unit,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { psnCaptFilesListEntry 1 }
+
+psnCaptFilesListName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the capture as it appears in the test unit's
+		 filesystem, relative to the directory it is contained in.  The name
+		 of the capture file must be used as a reference for subsequent
+		 operation on this file."
+
+    ::= { psnCaptFilesListEntry 2 }
+
+psnCaptFilesListDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the device the capture resides in. The device name is
+		determined by the architecture of the managed unit and it must be
+		used as a reference for subsequent operation on this file so that a
+		file is uniquely referenced."
+
+    ::= { psnCaptFilesListEntry 3 }
+
+psnCaptFilesListCreationDate OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the starting time of the capture"
+    ::= { psnCaptFilesListEntry 4 }
+
+psnCaptFilesListSize OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the size of the capture in bytes."
+    ::= { psnCaptFilesListEntry 5 }
+
+psnCaptFilesListURL OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This column is not supported in this table as captures cannot be
+		 bulk-downloaded"
+    ::= { psnCaptFilesListEntry 6 }
+
+psnCaptFilesListStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnCaptFilesListTable'. As this is a read-only
+		 table, the only value supported is 'active'."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { psnCaptFilesListEntry 7 }
+
+--
+--  Table of operations on Capture files 
+--
+
+psnCaptFilesOpsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnCaptFilesOpsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table is the interface provided to perform operations on
+	    capture files.  A client wishing to do an operation on a particular
+	    file should first look up the file in the psnCaptFilesListTable.
+
+	    Then, a new row must be created in this table and set the FileName
+	    and Device cells to the file name and device name of the file that
+	    should get the action, as they appear in the ListTable. An Action
+	    must be set as well, which indicates which operation must be done
+	    on the specified file.
+
+	    If necessary, the Arg cell must be set if the operation requires an
+	    argument, such as the new file name when renaming files.
+
+	    Then, the client must trigger the file operation by setting the
+	    RowStatus cell to 'active'.  The status of the action will be
+	    reported in the Result cell.  Finally, the client must remove the
+	    row from the table by setting the RowStatus cell to 'destroy'.
+
+		The client is responsible for removing the unused table rows,
+		otherwise the maximum number of rows would be eventually reached,
+		preventing the creation of new rows."
+
+    ::= { psnCaptFiles 2 }
+
+psnCaptFilesOpsEntry OBJECT-TYPE
+    SYNTAX            PsnCaptFilesOpsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information on a file operation
+		 requested by any client."
+
+    INDEX { psnCaptFilesOpsIndex }
+    ::= { psnCaptFilesOpsTable 1 }
+
+PsnCaptFilesOpsEntry ::= SEQUENCE {
+    psnCaptFilesOpsIndex          TableIndex,
+    psnCaptFilesOpsFileName       DisplayString,
+    psnCaptFilesOpsDevice         DisplayString,
+    psnCaptFilesOpsArgs           DisplayString,
+    psnCaptFilesOpsAction         FileAction,
+    psnCaptFilesOpsResult         FileOpsResult,
+    psnCaptFilesOpsStatus         RowStatus
+}
+
+psnCaptFilesOpsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each different operation
+		that takes place simultaneously.  Index values must start at 1 but
+		can be re-used as finished operations are flushed from the table.  A
+		client that wants to request a new file operation would typically
+		try index 1, if it is present in the table, it would try index 2,
+		and so on, until a free index is found."
+
+    ::= { psnCaptFilesOpsEntry 1 }
+
+psnCaptFilesOpsFileName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the file that will be the object of the operation. It
+		must be the same name as it appears in the ListTable."
+
+    ::= { psnCaptFilesOpsEntry 2 }
+
+psnCaptFilesOpsDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the device where the file that will be the object of
+		the operation is stored.  It must be the same device as it appears in the
+		ListTable."
+
+    ::= { psnCaptFilesOpsEntry 3 }
+
+psnCaptFilesOpsArgs OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "An optional argument required by the operation. For example, the
+		new file name when a file is renamed."
+
+    ::= { psnCaptFilesOpsEntry 4 }
+
+psnCaptFilesOpsAction OBJECT-TYPE
+    SYNTAX            FileAction
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The operation to be performed on the specified file. Setting this
+		cell to a non-idle action triggers the operation."
+
+    ::= { psnCaptFilesOpsEntry 5 }
+
+psnCaptFilesOpsResult OBJECT-TYPE
+    SYNTAX            FileOpsResult
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This cell indicates the result of the operation after it is
+		triggered by the Action cell."
+
+    ::= { psnCaptFilesOpsEntry 6 }
+
+psnCaptFilesOpsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnCaptFilesOpsTable'. Enables dynamic
+         creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCEd documents to get more
+         information about the ancoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { psnCaptFilesOpsEntry 7 }
+
+
+--
+-- Capture files post-filtering group
+--
+
+psnCaptPostFilterControl     OBJECT IDENTIFIER ::= { psnCaptFiles 3 }
+
+psnCaptPostFilterSourceFile OBJECT-TYPE 
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the capture file that must be filtered, as it appears
+		in the psnCaptFilesList table, which is relative to the device it is
+		contained in.  The capture file will not be altered by the filtering
+		process, but one or more capture files containing the filtered data
+		will be created."
+
+    ::= { psnCaptPostFilterControl 1 }
+
+psnCaptPostFilterSourceDevice OBJECT-TYPE 
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the device the source file resides in. The device name
+		is determined by the architecture of the managed unit and it must be
+		the same name as it is listed in the psnCaptFilesList table."
+
+    ::= { psnCaptPostFilterControl 2 }
+
+psnCaptPostFilterFormat OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          pcapng (0),
+                          pcap (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the format of the files generated by the post-filtering
+		 process:
+
+         - 'pcapng' : WireShark's PcapNG file format.
+         - 'pcap'   : WireShark's original Pcap file format.
+		"
+    ::= { psnCaptPostFilterControl 3 }
+
+psnCaptPostFilterTimeEnable OBJECT-TYPE 
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "A boolean value that indicates if a filter condition on the
+		 timestamp of the captured packets must be imposed.  If true, only
+		 the packets with a timestamp with the time interval specified in
+		 the psnCaptPostFilterTimeBegin/End OIDs will be copied to the
+		 post-filtering output files.  "
+
+    ::= { psnCaptPostFilterControl 4 }
+
+psnCaptPostFilterTimeBegin OBJECT-TYPE 
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Indicates the minimum timestamp of the filter condition.
+		 This OID is automatically set to the start time of the capture
+		 each time the psnCaptPostFilterSourceFile and Device OIDs are set.
+		 The format is 'YYYY-MM-DD [HH[:MM[:SS]]]', note that the time part
+		 of the specification may be incomplete.
+	    "
+
+    ::= { psnCaptPostFilterControl 5 }
+
+psnCaptPostFilterTimeEnd OBJECT-TYPE 
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Indicates the maximum timestamp of the filter condition.
+		 This OID is automatically set to the start time of the capture file
+		 each time the psnCaptPostFilterSourceFile and Device OIDs are set.
+		 The format is 'YYYY-MM-DD [HH[:MM[:SS]]]', note that the time part
+		 of the specification may be incomplete.
+		"
+
+    ::= { psnCaptPostFilterControl 6 }
+
+psnCaptPostFilterStreams OBJECT-TYPE 
+    SYNTAX            Gauge32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This integer is a mask of bits, where each bit indicates one of the
+	     capture streams of the managed unit.  Bit numbering starts at the
+	     first stream of the first port, and bits are grouped by port.  For
+	     example, if the managed unit has two ports, with 16 streams per
+	     port, then bit #0 of this mask indicates if the packets captured by
+	     stream 0 of port A must be copied to the output files.  Bit 15
+	     refers to the packets captured by stream 15 of port A, bit 16
+	     refers to the packets captured by stream 0 of port B, and so on."
+
+    ::= { psnCaptPostFilterControl 7 }
+
+psnCaptPostFilterAction OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          idle (0),
+                          generate (1),
+                          reset (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This OID is used to command an action on the filter. The available
+	     values are:
+
+         - 'generate'  : Triggers the generation of the output files based
+            on the current configuration of the capture filter.  
+		    This operation may take some minutes, depending on the amount of
+            data to be processed and filtered, and it can't be cancelled. 
+            The psnCaptPostFilterResult OID will reflect the current status
+            of the filtering action.
+
+         - 'reset'   : Resets the configuration of the capture filter to
+            their default values.
+		"
+    ::= { psnCaptPostFilterControl 8 }
+
+psnCaptPostFilterResult OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          idle (0),
+                          inProgress (1),
+                          success (2),
+                          noSource (3),
+                          badTimeInterval (4),
+                          error (5),
+                          timeout (6)
+                      }
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This OID indicates the status of the last action requested. 
+         The available values are:
+
+         - 'idle'  : The post-filter is ready to accept a new action.
+
+         - 'inProgress' : The post-filter is busy filtering the capture data
+            according to the post-filter configuration that was set when the
+            psnCaptPostFilterAction OID was set to 'generate'. The
+		    post-filter will not accept any filtering actions while in this
+            state.
+
+		 - 'noSource' : Either the file name of the capture or its device
+			do not exist or are not specified.
+
+		 - 'badTimeInterval' : The time filter condition was enabled but an 
+		    incorrect time interval was set.
+
+         - 'error'  : An undefined error was encountered while post-filtering the
+            capture data. The post-filter is accepting new actions in this
+			state.
+
+		 - 'timeout' : The previous post-filter generation could not be
+		    completed within a reasonable amount of time.
+		"
+
+    ::= { psnCaptPostFilterControl 9 }
+
+--
+--  Table of Post-filtered capture files
+--
+
+psnCaptPostFilterFilesTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnCaptPostFilterFilesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table lists all files generated by the post-filtering of a
+		 given packet capture file present in the test unit.  Once the
+		 post-filter action specified in the post-filtering configuration
+		 OIDs has finished (which is indicated by the Result OID), the
+		 resulting files are listed in this table.  An external application
+		 may download these files using the URL suffix provided for each
+		 file listed in this table.
+
+		 The results of the post-filtering are not cumulative, so the files
+		 produced by a post-filtering action are lost when a new
+		 post-filtering action is requested.
+		"
+
+    ::= { psnCaptFiles 4 }
+
+psnCaptPostFilterFilesEntry OBJECT-TYPE
+    SYNTAX            PsnCaptPostFilterFilesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information for each capture file
+		 generated by the post-filter."
+
+    INDEX { psnCaptPostFilterFilesIndex }
+
+    ::= { psnCaptPostFilterFilesTable 1 }
+
+PsnCaptPostFilterFilesEntry ::= SEQUENCE {
+    psnCaptPostFilterFilesIndex          TableIndex,
+    psnCaptPostFilterFilesName           DisplayString,
+    psnCaptPostFilterFilesDevice         DisplayString,
+    psnCaptPostFilterFilesStartTime      DisplayString,
+    psnCaptPostFilterFilesSize           Counter64,
+    psnCaptPostFilterFilesURL            DisplayString,
+    psnCaptPostFilterFilesStatus         RowStatus
+}
+
+psnCaptPostFilterFilesIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each file generated by the
+		 post-filtering action,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { psnCaptPostFilterFilesEntry 1 }
+
+psnCaptPostFilterFilesName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the file as it appears in the test unit's filesystem,
+		 relative to the directory it is contained in. The name of the file
+		  must be used as a reference for subsequent operation on this file."
+
+    ::= { psnCaptPostFilterFilesEntry 2 }
+
+psnCaptPostFilterFilesDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the device the file resides in. The device name is
+		determined by the architecture of the managed unit and it must be
+		used as a reference for subsequent operation on this file so that a
+		file is uniquely referenced."
+
+    ::= { psnCaptPostFilterFilesEntry 3 }
+
+psnCaptPostFilterFilesStartTime OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the creation time of the file which equals the to the
+		 capture timestamp of the first packet"
+    ::= { psnCaptPostFilterFilesEntry 4 }
+
+psnCaptPostFilterFilesSize OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the size of the file in bytes."
+    ::= { psnCaptPostFilterFilesEntry 5 }
+
+psnCaptPostFilterFilesURL OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the download URL of this file. An external application
+		 can download this file via HTTP using the URL specified in this column.
+		 Note, however, that this URL must be prefixed with the protocol and
+		 host name or IP address of the managed unit, for example, if the
+		 URL listed in this OID is 'somedir/somefile.txt', the actual URL
+		 would look like 'http://192.168.1.1/somedir/somefile.txt', where
+		 192.168.1.1 is the IP address of the managed unit.
+		"
+    ::= { psnCaptPostFilterFilesEntry 6 }
+
+psnCaptPostFilterFilesStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnCaptPostFilterFilesTable'. As this is a read-only
+		 table, the only value supported is 'active'."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { psnCaptPostFilterFilesEntry 7 }
+
+END

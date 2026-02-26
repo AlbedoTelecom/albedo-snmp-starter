@@ -1,0 +1,1578 @@
+ATSL-E1-MONITOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for E1 monitoring and performance evaluation.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32, Counter32   FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Real32, Unsigned8, 
+    Integer8, RatioPercentage                             FROM ATSL-MIB
+    ABCD                                                  FROM ATSL-TDM-PORT-MIB;
+
+ e1Monitor MODULE-IDENTITY
+    LAST-UPDATED "201409180000Z" -- 18 September, 2014
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module defines configuration fields and tables required for 
+         result retrieval from an E1 monitor. The E1 signal description is
+         included in standard ITU-T G.703. Frame structures used in this MIB
+         are defined in ITU-T G.704 standard.
+
+         The 'e1Monitor' does not supply any resource required to configure
+         the E1 signal or frame structure in the agent and assumes this
+         configuration as something given. It follows a list with the Scalars
+         and tables defined by the MIB:
+
+         Scalars
+
+        - 'e1MonEnable': Starts / Stops network monitoring in the managed
+          entity. The action starts monitoring in all the available blocks. The
+          number of monitoring blocks may not be the same for different managed
+          entities and it may be that there is only one monitoring block for
+          some of them.
+
+         Tables
+
+        - 'e1MonAnomaliesTable': Table that stores information about anomalies
+          recorded in a TDM link. An anomaly is defined as the smallest
+          discrepancy which can be observed between the actual and desired
+          characteristics in the TDM frame structure or content. The occurrence
+          of a single anomaly does not constitute an interruption in the ability
+          to perform a required function but it may involve temporary
+          transmission performance degradation. For the particular case of E1
+          transmission systems, examples of anomalies are isolated bit errors
+          (usually recorded as TSE errors by test equipment) CRC errors and
+          line code errors.
+
+        - 'e1MonDefectsTable': This is a table that contains information about
+          defects declared in E1 signals received by the agent test ports. A
+          defect is declared when the density of anomalies has reached a level
+          where the ability to perform a required function has been interrupted.
+          Defects are usually persistent indication of a fault that clear only
+          when the triggering condition has been resolved. In the particular
+          case of E1 transmission systems, typical examples of defects are the
+          loss of signal (LOS), loss of frame (LOF) and the alarm indication
+          signal (AIS).
+
+        - 'e1MonOccupancyTable': This table stores information of the ITU-T
+          G.703 frame at time-slot level. This information belongs to two
+          different sets: (1) analog results, including the instantaneous
+          frequency and level measured in the time slot and (2) digital results
+          related with the bit enconding of signals carried in the time-slot.
+          It is assumed that the time-slot carries a ITU-T G.711 A-law encoded
+          speech signal. The table is designed to be compatible with agents
+          unable to generate simultaneous results for all time-slots.
+          The manager configures a time-slot number and then the agent loads
+          results for this specific time-slot that can be later retrieved by
+          remote SNMP managers.
+
+        - 'e1MonMultiframeTable': Provides resources to read the E1 multiframe
+          content received in a test port. Results stored in the table depend
+          on a multiframe structure present in the receiver and the ability of
+          the analyser to decode one of such  multiframe structures. E1 frames
+          may be structured in two different multiframes: The CRC-4 multiframe
+          and the CAS multiframe. The CRC-4 multiframe can be used for
+          transmission error monitoring and to avoid frame syncronization with
+          spurious frame alignment sequences. On the other hand, The CAS
+          multiframe carries signalling information that enables end users to
+          establish and terminate calls.
+
+        - 'e1MonCrc4Table': This table reads the content of the first E1 frame
+          time slot in frames containing a CRC-4 multiframe structure. In this
+          case, reception of the FAS word is alternated with the Non-Frame
+          Alignment Signal (NFAS). The values stored in this table are not valid
+          if there is not a CRC-4 multiframe present in the received data flow.
+
+        - 'e1MonCasTable': This table contains results about the Channel
+          Association Signalling (CAS) multiframe. In CAS signalling, a
+          signalling channel is associated with each information channel (there
+          is no common signalling channel). The CAS channel provides four bits
+          (A, B, C, D) for each user channel every 16 frames. This is equivalent
+          to a 2 kb/s channel. The CAS signalling is situated in the TS16 of all
+          the frames sent. Each TS16 therefore carries the signalling for two
+          telephone channels.
+
+         There is one 'e1MonCasTable' for each test port. Tables are
+         distiguished through the value of 'e1MonMultiframeIndex'. This index
+         is also used to tie the 'e1MonCasTable' to an specific row of the
+         'e1MonMultiframeTable'.The values stored in this table are not valid if
+         there is not a CAS multiframe present in the received data flow.
+       
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - AT-2048 E1 / Datacom Tester.
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION     "201409180000Z" -- 18 September, 2014
+    DESCRIPTION
+        "Three new tables are included ('e1MonMultiframeTable',
+         'e1MonCrc4Table', 'e1MonCasTable') with the purpose of CRC-4 and CAS
+         multiframe monitoring."
+    REVISION     "201406130000Z" -- 13 June, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 13 }
+
+--
+-- Textual conventions
+--
+
+E1TimeSlot ::=TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "Decimal value that represents one of the 32 64 kb/s time intervals
+         available in a E1 TDM frame operating at 2048 kb/s. Individual time
+         slots are identified by a number between 0 and 32. The first time slot
+         (time slot 0) is the one that carries the Frame Alignment Sequence
+         (FAS). All other time slots (time slots 1, 2,..., 31) are numbered
+         sequentially after the FAS time slot."
+    SYNTAX            Unsigned32 (0..31)
+
+--
+-- Top level module structure
+--
+
+e1MonControl      OBJECT IDENTIFIER ::= { e1Monitor 1 }
+
+--
+-- Monitoring enable / disable control group
+--
+
+e1MonEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops network monitoring in the managed entity. The action
+         starts monitoring in all the avaialble blocks. The number of monitoring
+         blocks may not be the same for different managed entities and it may
+         be that there is only one monitoring block for some of them."
+    ::= { e1MonControl 1 }
+
+--
+--  E1 Anomalies result table
+--
+
+e1MonAnomaliesTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1MonAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table that stores information about anomalies recorded in a TDM link.
+         An anomaly is defined as the smallest discrepancy which can be observed
+         between the actual and desired characteristics in the TDM frame
+         structure or content. The occurrence of a single anomaly does not
+         constitute an interruption in the ability to perform a required
+         function but it may involve temporary transmission performance
+         degradation.
+
+         For the particular case of E1 transmission systems, examples of
+         anomalies are isolated bit errors (usually recorded as TSE errors by
+         test equipment) CRC errors and line code errors."
+     REFERENCE
+        "- ITU-T G.806: Characteristics of transport equipment - Description
+           methodology and generic functionality."
+    ::= { e1Monitor 2 }
+
+e1MonAnomaliesEntry OBJECT-TYPE
+    SYNTAX            E1MonAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing E1 anomaly statistics corresponding to a
+         particular monitoring block."
+    INDEX { e1MonAnomaliesIndex }
+    ::= { e1MonAnomaliesTable 1 }
+
+E1MonAnomaliesEntry ::= SEQUENCE {
+    e1MonAnomaliesIndex           TableIndex,
+    e1MonAnomaliesBlockName       DisplayString,
+    e1MonAnomaliesCode            Counter32,
+    e1MonAnomaliesCodeRate        RatioPercentage,
+    e1MonAnomaliesCodeSeconds     Counter32,
+    e1MonAnomaliesFas             Counter32,
+    e1MonAnomaliesFasRate         RatioPercentage,
+    e1MonAnomaliesFasSeconds      Counter32,
+    e1MonAnomaliesCrc             Counter32,
+    e1MonAnomaliesCrcRate         RatioPercentage,
+    e1MonAnomaliesCrcSeconds      Counter32,
+    e1MonAnomaliesRebe            Counter32,
+    e1MonAnomaliesRebeRate        RatioPercentage,
+    e1MonAnomaliesRebeSeconds     Counter32,
+    e1MonAnomaliesMfas            Counter32,
+    e1MonAnomaliesMfasRate        RatioPercentage,
+    e1MonAnomaliesMfasSeconds     Counter32,
+    e1MonAnomaliesTse             Counter32,
+    e1MonAnomaliesTseRate         RatioPercentage,
+    e1MonAnomaliesTseSeconds      Counter32,
+    e1MonAnomaliesStatus          RowStatus
+}
+
+e1MonAnomaliesIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { e1MonAnomaliesEntry 1 }
+
+e1MonAnomaliesBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { e1MonAnomaliesEntry 2 }
+
+e1MonAnomaliesCode OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of code errors detected from the beginning of the
+         monitoring session. A code anomaly happens when for some reason the
+         line code rules are not met in the receiving side."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { e1MonAnomaliesEntry 3 }
+
+e1MonAnomaliesCodeRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected code errors and the count
+         of all symbols received from the beginning of the monitoring session.
+         Definition of a 'Code' anomaly follows the explanation given in this
+         MIB within 'e1MonAnomaliesCode'."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { e1MonAnomaliesEntry 4 }
+
+e1MonAnomaliesCodeSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one code error accounted from the
+         beginning of the current monitoring session. Definition of the 'Code'
+         anomaly follows the explanation given in this MIB within
+         'e1MonAnomaliesCode'."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { e1MonAnomaliesEntry 5 }
+
+e1MonAnomaliesFas OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of FAS errors detected from the beginning of the
+         monitoring session. This anomaly indicates that one or more bits are
+         incorrect in one Frame Alignment Sequence (FAS). The standard FAS is
+         the seven-bit 0011011 word. This word is carried in alternate frames
+         within the TS0."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 6 }
+
+e1MonAnomaliesFasRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected FAS errors and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'FAS' anomaly follows the explanation given in this
+         MIB within 'e1MonAnomaliesFas'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 7 }
+
+e1MonAnomaliesFasSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one FAS error accounted from the
+         beginning of the current monitoring session. Definition of the 'FAS'
+         anomaly follows the explanation given in this MIB within
+         'e1MonAnomaliesFas'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 8 }
+
+e1MonAnomaliesCrc OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of CRC-4 code anomalies detected from the beginning of the
+         monitoring session. CRC-4 errors are computed by the receiver on each
+         received CRC-4 multiframe block (eight regular E1 frames). If the
+         computed code does not match the received one, an ECRC is accounted.
+
+         ECRC is an indicator of transmission errors. If the bit errors are
+         uncommon enough to not overload the code, the ECRC provides a good
+         in-service BER estimation."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 9 }
+
+e1MonAnomaliesCrcRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected CRC errors and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'CRC' anomaly follows the explanation given in this
+         MIB within 'e1MonAnomaliesCrc'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 10 }
+
+e1MonAnomaliesCrcSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one CRC error accounted from the
+         beginning of the current monitoring session. Definition of the 'CRC'
+         anomaly follows the explanation given in this MIB within
+         'e1MonAnomaliesCrc'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 11 }
+
+
+e1MonAnomaliesRebe OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total count of Remote End Block Error (REBE) anomalies detected from
+         the beginning of the monitoring session. This anomaly is raised if the
+         first bit of the frames 14 or 16 of the E1 16-frame CRC-4 multiframe
+         is set to 0. This anomaly indicates that an error has been found
+         in a CRC-4 block in the opposite transmission direction by the remote
+         end. In other words, this error is an indicator of trans mission errors
+         in the opposite transmission direction."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 12 }
+
+e1MonAnomaliesRebeRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected REBE anomalies and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'REBE' anomaly follows the explanation given in this
+         MIB within 'e1MonAnomaliesRebe'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 13 }
+
+e1MonAnomaliesRebeSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one REBE anomaly accounted from
+         the beginning of the current monitoring session. Definition of the
+         'CRC' anomaly follows the explanation given in this MIB within
+         'e1MonAnomaliesRebe'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 14 }
+
+e1MonAnomaliesMfas OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Multiframe FAS anomalies detected from the beginning
+         of the monitoring session. CAS multiframe uses a fixed four bit
+         sequence (0000) for multiframe delineation. An Multiframe FAS anomaly
+         is registered for each error found in the expected multiframe FAS
+         word."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 15 }
+
+e1MonAnomaliesMfasRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected MFAS anomalies and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'MFAS' anomaly follows the explanation given in this
+         MIB within 'e1MonAnomaliesMfas'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 16 }
+
+e1MonAnomaliesMfasSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one MFAS anomaly accounted from
+         the beginning of the current monitoring session. Definition of the
+         'MFAS' anomaly follows the explanation given in this MIB within
+         'e1MonAnomaliesMfas'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonAnomaliesEntry 17 }
+
+e1MonAnomaliesTse OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Test Sequence Errors (TSE) detected from the beginning
+         of the monitoring session. One TSE is equivalent to a single bit
+         difference between the transmitted and the received test pattern
+         (PRBS or other)."
+    ::= { e1MonAnomaliesEntry 18 }
+
+e1MonAnomaliesTseRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected TSE anomalies and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'TSE' anomaly follows the explanation given in this
+         MIB within 'e1MonAnomaliesTse'."
+    ::= { e1MonAnomaliesEntry 19 }
+
+e1MonAnomaliesTseSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one TSE anomaly accounted from
+         the beginning of the current monitoring session. Definition of the
+         'TSE' anomaly follows the explanation given in this MIB within
+         'e1MonAnomaliesTse'."
+    ::= { e1MonAnomaliesEntry 20 }
+
+e1MonAnomaliesStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'e1MonAnomaliesTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1MonAnomaliesEntry 21 }
+
+--
+--  E1 Defects result table
+--
+
+e1MonDefectsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1MonDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a table that contains information about defects declared in
+         E1 signals received by the agent test ports. A defect is declared when
+         the density of anomalies has reached a level where the ability to
+         perform a required function has been interrupted. Defects are usually
+         persistent indication of a fault that clear only when the triggering
+         condition has been resolved.
+
+         In the particular case of E1 transmission systems, typical examples
+         of defects are the loss of signal (LOS), loss of frame (LOF) and the
+         alarm indication signal (AIS)."
+    REFERENCE
+        "- ITU-T G.806: Characteristics of transport equipment - Description
+           methodology and generic functionality."
+    ::= { e1Monitor 3 }
+
+e1MonDefectsEntry OBJECT-TYPE
+    SYNTAX            E1MonDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing E1 defect statistics corresponding to a
+         particular monitoring block."
+    INDEX { e1MonDefectsIndex }
+    ::= { e1MonDefectsTable 1 }
+
+E1MonDefectsEntry ::= SEQUENCE {
+    e1MonDefectsIndex             TableIndex,
+    e1MonDefectsBlockName         DisplayString,
+    e1MonDefectsLos               TruthValue,
+    e1MonDefectsLosSeconds        Counter32,
+    e1MonDefectsAis               TruthValue,
+    e1MonDefectsAisSeconds        Counter32,
+    e1MonDefectsLof               TruthValue,
+    e1MonDefectsLofSeconds        Counter32,
+    e1MonDefectsRai               TruthValue,
+    e1MonDefectsRaiSeconds        Counter32,
+    e1MonDefectsCrclom            TruthValue,
+    e1MonDefectsCrclomSeconds     Counter32,
+    e1MonDefectsCaslom            TruthValue,
+    e1MonDefectsCaslomSeconds     Counter32,
+    e1MonDefectsMais              TruthValue,
+    e1MonDefectsMaisSeconds       Counter32,
+    e1MonDefectsMrai              TruthValue,
+    e1MonDefectsMraiSeconds       Counter32,
+    e1MonDefectsLss               TruthValue,
+    e1MonDefectsLssSeconds        Counter32,
+    e1MonDefectsAll0              TruthValue,
+    e1MonDefectsAll0Seconds       Counter32,
+    e1MonDefectsAll1              TruthValue,
+    e1MonDefectsAll1Seconds       Counter32,
+    e1MonDefectsSlip              TruthValue,
+    e1MonDefectsSlipSeconds       Counter32,
+    e1MonDefectsStatus            RowStatus
+}
+
+e1MonDefectsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { e1MonDefectsEntry 1 }
+
+e1MonDefectsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { e1MonDefectsEntry 2 }
+
+e1MonDefectsLos OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of signal defect. This defect is detected when no signal is
+         detected in the receiver input. The 'true' status of this field
+         corresponds with the presence of the defect in the signal.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.703: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { e1MonDefectsEntry 3 }
+
+e1MonDefectsLosSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LOS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LOS'
+         defect follows the explanation given in this MIB within 
+         'e1MonDefectsLos'."
+    REFERENCE
+        "- ITU-T G.703: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { e1MonDefectsEntry 4 }
+
+e1MonDefectsAis OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Alarm indication signal. It is defined as an all-1 line signal. All
+         bits in the AIS, even the ones in the TS0, are set to '1'.
+
+         The AIS indicates a failure in the transmission source that does not
+         allow transmission of user data towards the destination. For example,
+         a regenerator that detects a LOS at its input may send an
+         AIS downstream.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.703: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { e1MonDefectsEntry 5 }
+
+e1MonDefectsAisSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the AIS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'AIS'
+         defect follows the explanation given in this MIB within 
+         'e1MonDefectsAis'."
+    REFERENCE
+        "- ITU-T G.703: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { e1MonDefectsEntry 6 }
+
+e1MonDefectsLof OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of frame. This defect is raised when for some reason the E1
+         analyser is unable to find the periodic FAS pattern in the incoming
+         signal.
+
+         LOF is an indication of framing problems in a network device due to a
+         faulty line card or other reasons.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 7 }
+
+e1MonDefectsLofSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LOF defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LOF'
+         defect follows the explanation given in this MIB within
+         'e1MonDefectsLof'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 8 }
+
+e1MonDefectsRai OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Remote alarm indication: It is an defect carried in the A-bits within
+         the G.704 2048 kb/s frame. The RAI is raised when the A-bits are set to
+         '1' by the transmitter. The RAI indicates that there is a failure in
+         the transmission source that does not allow data transmission towards
+         the origin. For example, a regenerator that detects a LOS at its input
+         may send a RAI upstream.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.703: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { e1MonDefectsEntry 9 }
+
+e1MonDefectsRaiSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the RAI defect accounted from the
+         beginning of the current monitoring session. Definition of the 'RAI'
+         defect follows the explanation given in this MIB within
+         'e1MonDefectsRai'."
+    REFERENCE
+        "- ITU-T G.703: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { e1MonDefectsEntry 10 }
+
+e1MonDefectsCrclom OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "CRC loss of multiframe. The 16-frame CRC multframe uses a fixed bit
+         sequence (001011 binary) carried in frames 1, 3,5,7,9 and 11 for
+         framing purposes.
+
+         The CRC-LOM is declared when the CRC-4 framing sequence is not found in
+         the incoming signal. This error usually indicates that the analysed
+         frame lacks of CRC-4 multiframe structure.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonDefectsEntry 11 }
+
+e1MonDefectsCrclomSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the CRC-LOM defect accounted from the
+         beginning of the current monitoring session. Definition of the
+         'CRC-LOM' defect follows the explanation given in this MIB within
+         'e1MonDefectsCrclom'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'.
+
+         - ITU-T G.706: Frame Alignment and Cyclic Redundancy Check (CRC)
+           procedures relating to basic frame structures defined in
+           Recommendation G.704."
+    ::= { e1MonDefectsEntry 12 }
+
+e1MonDefectsCaslom OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "CAS loss of multiframe. The 16-frame CAS multiframe uses a fixed bit
+         sequence (0000 binary) carried in the first four bites of frame 0 for
+         frame alignment purposes.
+
+         The CAS-LOM is declared when the CAS framing sequence is not found in
+         the incoming signal. This error usually indicates that the analysed
+         frame lacks of CAS multiframe structure."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 13 }
+
+e1MonDefectsCaslomSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the CAS-LOM defect accounted from the
+         beginning of the current monitoring session. Definition of the
+         'CAS-LOM' defect follows the explanation given in this MIB within
+         'e1MonDefectsCaslom'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 14 }
+
+e1MonDefectsMais OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Multiframe AIS. This alarm is raised in case that an all-1 line signal
+         is detected within the TS16 when a frame structure with CAS multiframe
+         is configured.
+
+         The MAIS indicates a failure in the transmission source that does not
+         allow transmission of CAS information toward the destination.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 15 }
+
+e1MonDefectsMaisSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the MAIS defect accounted from the
+         beginning of the current monitoring session. Definition of the
+         'MAIS' defect follows the explanation given in this MIB within
+         'e1MonDefectsMais'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 16 }
+
+e1MonDefectsMrai OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Multiframe Remote Alarm Indication. It is an alarm condition carried in
+         the A-bit within TS16 in the G.704 2048 kb/s frame. The RAI is raised
+         when the A-bit are set to '1' by the transmitter.
+
+         MRAI defect generation or detection is disabled when the configured
+         frame structure does not carry the CAS multiframe in TS16.
+
+         The MRAI indicates that there is a failure in the transmission source
+         that does not allow transmission of the CAS multiframe towards the
+         origin.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 17 }
+
+e1MonDefectsMraiSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the MRAI defect accounted from the
+         beginning of the current monitoring session. Definition of the 'MRAI'
+         defect follows the explanation given in this MIB within
+         'e1MonDefectsMrai'."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1MonDefectsEntry 18 }
+
+e1MonDefectsLss OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of sequence synchronization. This event indicates that the
+         expected test pattern does not match the actually received pattern.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    REFERENCE
+        "- ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above."
+    ::= { e1MonDefectsEntry 19 }
+
+e1MonDefectsLssSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LSS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LSS'
+         defect follows the explanation given in this MIB within
+         'e1MonDefectsLss'."
+    REFERENCE
+        "- ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above."
+    ::= { e1MonDefectsEntry 20 }
+
+e1MonDefectsAll0 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This alarm occurs when all the user bit capacity is set to '0'. Note
+         that in E1 frames TS0 and TS16 (if CAS is used) do not need to be all
+         '0' to declare the 'All 0' condition.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    ::= { e1MonDefectsEntry 21 }
+
+e1MonDefectsAll0Seconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'All 0' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'All 0'
+         defect follows the explanation given in this MIB within 
+         'e1MonDefectsAll0'."
+    ::= { e1MonDefectsEntry 22 }
+
+e1MonDefectsAll1 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This alarm occurs when all the user bit capacity is set to '1'. Note
+         that in E1 frames TS0 and TS16 (if CAS is used) do not need to be all
+         '1' to declare the 'All 1' condition.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    ::= { e1MonDefectsEntry 23 }
+
+e1MonDefectsAll1Seconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'All 1' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'All 1'
+         defect follows the explanation given in this MIB within        
+         'e1MonDefectsAll1'."
+    ::= { e1MonDefectsEntry 24 }
+
+e1MonDefectsSlip OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Either one bit is missing or repeated in the received test pattern.
+         This error is usually related with timing problems within the network.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'e1MonEnable'."
+    ::= { e1MonDefectsEntry 25 }
+
+e1MonDefectsSlipSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'Slip' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'Slip'
+         defect follows the explanation given in this MIB within 
+         'e1MonDefectsSlip'."
+    ::= { e1MonDefectsEntry 26 }
+
+e1MonDefectsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'e1MonDefectsTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1MonDefectsEntry 27 }
+
+--
+--  E1 Occupancy grid results table
+--
+
+e1MonOccupancyTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1MonOccupancyEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table stores information of the ITU-T G.703 frame at time-slot
+         level. This information belongs to two different sets: (1) analog 
+         results, including the instantaneous frequency and level measured in 
+         the time slot and (2) digital results related with the bit encoding
+         of signals carried in the time-slot. It is assumed that the time-slot 
+         carries a ITU-T G.711 A-law encoded speech signal.
+
+         The table is designed to be compatible with agents unable to generate
+         simultaneous results for all time-slots. The manager configures a 
+         time-slot number and then the agent loads results for this specific
+         time-slot that can be later retrieved by remote SNMP managers."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'.
+
+         - ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { e1Monitor 4 }
+
+e1MonOccupancyEntry OBJECT-TYPE
+    SYNTAX            E1MonOccupancyEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing E1 time slot occupancy statistics corresponding
+         to a particular monitoring block."
+    INDEX { e1MonOccupancyIndex }
+    ::= { e1MonOccupancyTable 1 }
+
+E1MonOccupancyEntry ::= SEQUENCE {
+    e1MonOccupancyIndex           TableIndex,
+    e1MonOccupancyBlockName       DisplayString,
+    e1MonOccupancyTimeSlot        E1TimeSlot,
+    e1MonOccupancyLevel           Real32,
+    e1MonOccupancyFrequency       Real32,
+    e1MonOccupancyCodeMax         Integer8,
+    e1MonOccupancyCodeMin         Integer8,
+    e1MonOccupancyCodeAvg         Integer8,
+    e1MonOccupancyStatus          RowStatus
+}
+
+e1MonOccupancyIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { e1MonOccupancyEntry 1 }
+
+e1MonOccupancyBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { e1MonOccupancyEntry 2 }
+
+
+e1MonOccupancyTimeSlot OBJECT-TYPE
+    SYNTAX            E1TimeSlot
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Read / write field that defines the time-slot to be monitored. All the
+         test results described by other fields in the current table are
+         referred to the time-slot configured here.
+
+         The ITU-T G.703 E1 frame contains 32 time-slots identified by a
+         number between 0 and 31. This is the number the user has to configure
+         here to get the results from the corresponding time-slot."
+    ::= { e1MonOccupancyEntry 3 }
+
+e1MonOccupancyLevel OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dBm0"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Power level for the current time slot measured in dBm0 as specified in
+         ITU-T G.711."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { e1MonOccupancyEntry 4 }
+
+e1MonOccupancyFrequency OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Hz"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Frequency for the current time slot measured in Hz. For a G.711 encoded
+         signal with 8 kHz sampling frequency, the maximum allowed frequency is
+         4000 Hz."
+    ::= { e1MonOccupancyEntry 5 }
+
+e1MonOccupancyCodeMax OBJECT-TYPE
+    SYNTAX            Integer8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Decimal number that represents the maximum PCM code found in the
+         current time-slot in a time interval of one second.
+
+         This number is referred to the 8-bit PCM code that represents a G.711
+         A-law compressed voice sample."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { e1MonOccupancyEntry 6 }
+
+e1MonOccupancyCodeMin OBJECT-TYPE
+    SYNTAX            Integer8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Decimal number that represents the minimum code found in the current
+         time-slot in a time interval of one second.
+
+         This number is referred to the 8-bit PCM code that represents a G.711
+         A-law compressed voice sample."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { e1MonOccupancyEntry 7 }
+
+e1MonOccupancyCodeAvg OBJECT-TYPE
+    SYNTAX            Integer8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Decimal number that represents the minimum code found in the current
+         time slot in a time interval of one second.
+
+         This number is referred to the 8-bit PCM code that represents a G.711
+         A-law compressed voice sample."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { e1MonOccupancyEntry 8 }
+
+e1MonOccupancyStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'e1MonOccupancyTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1MonOccupancyEntry 9 }
+
+--
+--  E1 Multiframe monitoring table
+--
+
+e1MonMultiframeTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1MonMultiframeEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 'e1MonMultiframeTable' provides resources to read the E1 multiframe
+         content received in a test port. Results stored in the table depend on
+         a multiframe structure present in the receiver and the ability of the
+         analyser to decode one of such multiframe structures.
+
+         E1 frames may be structured in two different multiframes: The CRC-4
+         multiframe and the CAS multiframe. The CRC-4 multiframe can be used for
+         transmission error monitoring and to avoid frame synchronization with
+         spurious frame alignment sequences. On the other hand, The CAS
+         multiframe carries signalling information that enables end users to
+         establish and terminate calls."
+    ::= { e1Monitor 5 }
+
+e1MonMultiframeEntry OBJECT-TYPE
+    SYNTAX            E1MonMultiframeEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing E1 multiframe structure and content statistics
+         corresponding to a particular monitoring block."
+    INDEX { e1MonMultiframeIndex }
+    ::= { e1MonMultiframeTable 1 }
+
+E1MonMultiframeEntry ::= SEQUENCE {
+    e1MonMultiframeIndex          TableIndex,
+    e1MonMultiframeBlockName      DisplayString,
+    e1MonMultiframeCasSpareBit0   TruthValue,
+    e1MonMultiframeCasSpareBit1   TruthValue,
+    e1MonMultiframeCasSpareBit3   TruthValue,
+    e1MonMultiframeStatus         RowStatus
+}
+
+e1MonMultiframeIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1MonMultiframeEntry 1 }
+
+e1MonMultiframeBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1MonMultiframeEntry 2 }
+
+e1MonMultiframeCasSpareBit0 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reads the value of the CAS spare bit 0 located in the first frame of
+         the CAS multiframe. This OID contains a valid value if the test port
+         is configured decode the CAS multiframe."
+    ::= { e1MonMultiframeEntry 5 }
+
+e1MonMultiframeCasSpareBit1 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reads the value of the CAS spare bit 1 located in the first frame of
+         the CAS multiframe. This OID contains a valid value if the test port
+         is configured decode the CAS multiframe."
+    ::= { e1MonMultiframeEntry 6 }
+
+e1MonMultiframeCasSpareBit3 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reads the value of the CAS spare bit 3 located in the first frame of
+         the CAS multiframe. This OID contains a valid value if the test port
+         is configured decode the CAS multiframe."
+    ::= { e1MonMultiframeEntry 7 }
+
+e1MonMultiframeStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1MonMultiframeTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1MonMultiframeEntry 8 }
+
+--
+--  E1 CRC-4 multiframe monitoring table
+--
+
+e1MonCrc4Table OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1MonCrc4Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table reads the content of the first E1 frame time slot in frames
+         containing a CRC-4 multiframe structure. In this case, reception of
+         the FAS word is alternated with the Non-Frame Alignment Signal (NFAS).
+
+         There is one 'e1MonCrc4Table' for each test port. Tables are
+         distinguished through the value of 'e1MonMultiframeIndex'. This index
+         is also used to tie the 'e1MonCrc4Table' to an specific row of the
+         'e1MonMultiframeTable'. The values stored in this table are not valid
+         if there is not a CRC-4 multiframe present in the received data flow."
+    ::= { e1Monitor 6 }
+
+e1MonCrc4Entry OBJECT-TYPE
+    SYNTAX            E1MonCrc4Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing the TS0 content corresponding to a particular E1
+         frame in a CRC-4 multiframe."
+    INDEX { e1MonCrc4IndexBlock, e1MonCrc4IndexFrame }
+    ::= { e1MonCrc4Table 1 }
+
+E1MonCrc4Entry ::= SEQUENCE {
+    e1MonCrc4IndexBlock           TableIndex,
+    e1MonCrc4IndexFrame           TableIndex,
+    e1MonCrc4BlockName            DisplayString,
+    e1MonTs0                      Unsigned8,
+    e1MonCrc4Status               RowStatus
+}
+
+
+e1MonCrc4IndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for frame monitoring block
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1MonCrc4Entry 1 }
+
+e1MonCrc4IndexFrame OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, indicating the frame number
+         within the CRC multiframe.  It is recommended that values are
+         assigned contiguously starting from 1.  The value for each block
+         index must remain constant at least from one re-initialization of
+         the entity's network management to the next re-initialization."
+    ::= { e1MonCrc4Entry 2 }
+
+e1MonCrc4BlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1MonCrc4Entry 3 }
+
+e1MonTs0 OBJECT-TYPE
+    SYNTAX            Unsigned8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reads the first time slot (TS0) in an specific CRC-4 multiframe
+         position. The result is encoded in decimal value. Since E1 timeslots
+         are 8 bit data structures, this field has a value between 0 and 255."
+    ::= { e1MonCrc4Entry 4 }
+
+e1MonCrc4Status OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1MonCrc4Table'. Enables dynamic creation / deletion
+         of table entries in the current table. Information contained in the
+         table entry may not be available for read / write operations if the
+         status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1MonCrc4Entry 5 }
+
+--
+--  E1 CAS multiframe monitoring table
+--
+
+e1MonCasTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1MonCasEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains results about the Channel Association Signalling
+         (CAS) multiframe. In CAS signalling, a signalling channel is associated
+         with each information channel (there is no common signalling channel).
+         The CAS channel provides four bits (A, B, C, D) for each user channel
+         every 16 frames. This is equivalent to a 2 kb/s channel. The CAS
+         signalling is situated in the TS16 of all the frames sent. Each TS16
+         therefore carries the signalling for two telephone channels.
+
+         There is one 'e1MonCasTable' for each test port. Tables are
+         distinguished through the value of 'e1MonMultiframeIndex'. This index
+         is also used to tie the 'e1MonCasTable' to an specific row of the
+         'e1MonMultiframeTable'.The values stored in this table are not valid if
+         there is not a CAS multiframe present in the received data flow."
+    ::= { e1Monitor 7 }
+
+e1MonCasEntry OBJECT-TYPE
+    SYNTAX            E1MonCasEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing ABCD bit CAS statistics corresponding to a
+         particular E1 monitoring block."
+    INDEX { e1MonCasIndexBlock, e1MonCasIndexChannel }
+    ::= { e1MonCasTable 1 }
+
+E1MonCasEntry ::= SEQUENCE {
+    e1MonCasIndexBlock            TableIndex,
+    e1MonCasIndexChannel          TableIndex,
+    e1MonCasBlockName             DisplayString,
+    e1MonCas                      ABCD,
+    e1MonCasStatus                RowStatus
+}
+
+e1MonCasIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each frame monitoring
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1MonCasEntry 1 }
+
+e1MonCasIndexChannel OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, indicating the CAS channel number 
+         within the CAS multiframe."
+    ::= { e1MonCasEntry 2 }
+
+e1MonCasBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1MonCasEntry 3 }
+
+e1MonCas OBJECT-TYPE
+    SYNTAX            ABCD
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reads the ABCD CAS signalling bits for the current time slot in binary
+         format. The value in this field is a binary number between 0000 and
+         1111."
+    ::= { e1MonCasEntry 4 }
+
+e1MonCasStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1MonCasTable'. Enables dynamic creation / deletion
+         of table entries in the current table. Information contained in the
+         table entry may not be available for read / write operations if the
+         status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1MonCasEntry 5 }
+
+END

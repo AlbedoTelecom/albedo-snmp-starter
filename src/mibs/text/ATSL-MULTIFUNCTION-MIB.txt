@@ -1,0 +1,201 @@
+ATSL-MULTIFUNCTION-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects managent of multi-function units
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, RowStatus                         FROM SNMPv2-TC
+    atslGeneral, TableIndex, Word32                       FROM ATSL-MIB;
+
+ multiFunction MODULE-IDENTITY
+    LAST-UPDATED "201701260000Z" -- 26 January, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB defines configuration items required to properly manage a
+         unit capable of running multiple functions.  Usually, these
+         functions cannot be enabled simultaneously as the unit can only
+         operate one of the functions at a given time.  It is likely that
+         conflicts or errors arise in case the functions are not properly
+         arbitrated if multiple functions are enabled at the same time.
+         
+         Each function is usually managed by one or more MIBs, but these are
+         not aware of other MIBs belonging to other functions.  This is
+         necessary to avoid dependencies between generic MIBs that do not
+         relate to each other.  However, there must be some higher-level
+         selection that switches the current function of the managed unit.
+         
+         For example, consider a unit equipped both with TDM/E1/T1 and
+         Ethernet ports capable of testing and generating traffic on either
+         type of port, but not simultaneously.  While the TDM/E1/T1 ports
+         are managed by the TDM MIBs and the Ethernet ports are managed by
+         the PSN MIBs (Packet Switched Network), the global mode or function
+         of the unit is selected by OIDs in the ATSL-MULTIFUNCTION-MIB.
+
+		 Clients wishing to operate a multifunction unit should first
+		 traverse the 'mfFuncTable' of this MIB in order to know which
+		 functions are implemented by the unit.  The table lists one row per
+		 each supported function.  Then, the client may select one of the
+		 possible modes of the desired function in the 'mfFuncMode' column.
+
+		 Additionally, the 'mfActiveFunc' OID indicates if a TDM or a PSN
+		 mode has been selected.
+		 
+		 It is important that the OIDs of the function-specific MIBs that may
+		 conflict with the multifunction selection are never accessed
+		 directly in a multifunction unit, otherwise the unit may behave
+		 inconsistently.  Please refer to each specific MIB to know which of
+		 its OIDs cannot be accessed in a multi-function unit.
+		 
+		 In the example above, the 'mfFuncTable' would contain two rows: one
+		 for the 'tdm' function and another for the 'psn' function,
+		 indicating that the unit is capable of running TDM and PSN
+		 functions.  Should a TDM mode be selected, then the operating mode
+		 must be selected in the TDM row of the 'mfFuncMode' column. The
+		 'mfActiveFunc' should return the 'tdm' value.
+        
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION     "201701260000Z" -- 26 January, 2017
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 23 }
+
+--
+-- Textual conventions
+--
+
+MultiFunctionType ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Defines different non-concurrent, high-level functions of the managed unit.
+         These functions cannot be enabled simultaneously in a given unit.
+         The available configuration choices currently supported by this textual
+         convention are:
+
+         - 'tdm': TDM function (Time-Division Multiplexing) indicates that
+           the unit is operating (or is capable of operate) in one of the
+           TDM modes (G.703/E1, G.703/T1, G.703/E0).
+           
+         - 'psn': PSN function (Packet-Switched Network), indicates that the
+           unit is operating (or is capable of operate) in one of the
+           Ethernet modes.
+
+         - 'clkmon': Clock monitor function, indicates that the unit is
+           operating (or is capable of operate) in one of the time and
+           frequency analysis modes."
+           
+    SYNTAX            INTEGER {
+                          others (0),
+                          tdm (1),
+                          psn (2),
+                          clkmon (3)
+                      }
+
+--
+-- Table of supported functions
+--
+
+mfFuncTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF MfFuncEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table reports which functions are supported by the managed
+          unit."
+    ::= { multiFunction 1 }
+
+mfFuncEntry OBJECT-TYPE
+    SYNTAX            MfFuncEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing functions supported by the managed unit."
+    INDEX { mfFuncIndex }
+    ::= { mfFuncTable 1 }
+
+MfFuncEntry ::= SEQUENCE {
+    mfFuncIndex          TableIndex,
+    mfFuncType           MultiFunctionType,
+    mfFuncMode           Unsigned32,
+    mfFuncStatus         RowStatus
+}
+
+mfFuncIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each supported function. 
+         Values are assigned contiguously starting from 1.  The value for
+         each function index remains constant at least from one
+         re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { mfFuncEntry 1 }
+
+mfFuncType OBJECT-TYPE
+    SYNTAX            MultiFunctionType
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "A non-concurrent function supported by the managed unit."
+    ::= { mfFuncEntry 2 }
+
+mfFuncMode OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the specific operation mode of the function that
+        corresponds to the tablw row.  Setting this OID to a valid value
+        forces the agent to switch automatically to this row's function.
+        
+        The textual convention of this cell depends on the function:
+        	'tdm'     : ATSL-TDM-PORT-MIB::OperationMode
+        	'psn'     : ATSL-PSN-GENERATOR-MIB::EndpointMode
+        	'clkmon'  : (1: clock monitor, 0: external)
+        	
+        GET requests to this OID will return an 'external' mode if the
+        active mode of the agent does not match the row's function.
+        "
+    ::= { mfFuncEntry 3 }
+
+mfFuncStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'mfFuncTable'."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { mfFuncEntry 4 }
+
+--
+-- Active function
+--
+
+mfActiveFunc OBJECT-TYPE
+    SYNTAX            MultiFunctionType
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates in which function the agent is operating. The function is
+        automatically switched when any of the function modes is set."
+
+    ::= { multiFunction 2 }
+
+END

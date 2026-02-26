@@ -1,0 +1,1140 @@
+ATSL-E1-PORT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for E1 test port configuration.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Unsigned8, Real32            FROM ATSL-MIB
+    TdmInterface, ConnectorType, FrameType,
+    TimeSlotUse, ABCD                                     FROM ATSL-TDM-PORT-MIB;
+
+ e1Port MODULE-IDENTITY
+    LAST-UPDATED "201609200000Z" -- 20 September, 2016
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB defines configuration fields and tables required for
+         configuration of a 2048 kb/s E1 test port. The E1 signal description is
+         included in standard ITU-T G.703. Frame structures used in this MIB are
+         defined in ITU-T G.704 standard.
+
+         The E1 frame defines a cyclical set of 32 time slots of 8 bits. The
+         time slot 0 is devoted to transmission management and time slot 16 for
+         signalling; the rest were assigned originally for voice/data transport.
+
+                                 ------------------
+                                 |      TS0       |
+                                 |   FAS / NFAS   |
+                                 ------------------
+                                 |      TS1       |
+                                 ------------------
+                                 |       ...      |
+                                 ------------------
+                                 |      TS16      |
+                                 |       CAS      |
+                                 ------------------
+                                 |      TS17      |
+                                 ------------------
+                                 |       ...      |
+                                 ------------------
+                                 |      TS31      |
+                                 ------------------
+
+         Scalars
+
+         - 'e1PortEnable': Starts / Stops traffic generation in the managed
+           entity. The action starts generation through all the available
+           blocks. The number of monitoring blocks may not be the same for
+           different managed entities and it may be that there is only one
+           monitoring block for some of them.
+
+         - 'e1AddDropSource': Some agents can be configured to add / drop E1
+           time slot to / from an external datacom or G.703 64 kb/s interface.
+           To do that, the agent has to be configured either in E1 endpoint or
+           E1 monitor mode and the external interface has to be properly
+           configured. It is also required to select the port to be used to add
+           / drop time slots. To do that the 'e1AddDropSource' OID has to be
+           configured in the agent to either 'datacom' or 'g703e0'.
+
+         - 'e1AudioOutputSource': Some agents have the capability to add / drop
+           time slots from / to an analogue port. The agent is able to encode
+           the audio signal from the microphone and add it to the 2048 kb/s
+           frame or to drop a selected time slot to a speaker connected to the
+           audio port. In this case, it may be necessary to configure the origin
+           of the signal to be sent to the speaker.
+
+         Tables
+
+         - 'e1PortLineTable': The 'tdmPortLineTable' table configures some of
+           the basic physical operation parameters for TDM transmission and
+           reception. Some of these include the connector, line code, bit rate
+           and the clock source. Some of these settings may be relevant only for
+           a subset of the supported interfaces. For example, E1 interfaces are
+           not allowed to work at bit rates other than 2048 kb/s.
+
+         - 'e1PortFrameTable': E1 agents with traffic generation capabilities
+           may generate different kinds of 2048 kb/s framed and unframed
+           signals. This table provides the resources required to configure
+           frame structure and content. E1 Communication consist on continuous
+           transmission of frames consisting on 32 time slots of 8 bits each.
+           Frame synchronization is achieved by sending an indication showing
+           the position of the first time interval of each frame, so that, since
+           the receiver knows to which channel the information in each time slot
+           corresponds, it can demultiplex correctly. This way, the bytes
+           received in each slot are assigned to the correct channel.
+
+         - 'e1PortMuxTable': This table includes 32 rows, one for each time slot
+           present in the E1 frame. For each time slot the table specifies a
+           particular data source, including internally or externally generated
+           data..
+
+         - 'e1PortDemuxTable': This table includes 32 rows, one for each time
+           slot present in the E1 frame. For each time slot the table specifies
+           a particular data sink, including internal analysis blocks or
+           external destinations.
+
+         - 'e1PortCasTable': This table contains configuration of the Channel
+           Association Signalling (CAS) multiframe. As well as transmitting
+           information generated by the users of a telephone network, it is also
+           necessary to transmit signalling information. CAS signalling refers
+           to the protocols that must be established between exchanges so that
+           the users can exchange information one each other.
+
+         - 'e1PortNfasTable': This table configures the Non-Frame Alignment
+           Signal (NFAS) defined in E1 frames with CRC-4 multiframe structure.
+           The NFAS is made up of the the bits of the TS0 that do not contain
+           the FAS in positions 3 to 8. This signal is sent in alternate frames
+           (frame 1, frame 3, frame 5, etc.).
+    
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - AT-2048 E1 / Datacom Tester.
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION     "201609200000Z" -- 20 September, 2016
+    DESCRIPTION
+        "The 'TimeSlotUse' and 'ABCD' textual conventions are removed from this
+         MIB definition. These textual conventions are now included in
+         ATSL-TDM-PORT-MIB. 'TimeSlotUse' and 'ABCD' are now added to the import
+         list from the 'ATSL-TDM-PORT-MIB' module.
+
+         The 'e1PortModeTable' is not supported any more from this MIB.
+         the equivalent functionality is now provided from the
+         'ATSL-TDM-PORT-MIB' through the 'tdmPortModeTable'"
+    REVISION     "201602050000Z" -- 5 February, 2016
+    DESCRIPTION
+        "The 'FrameType' textual convention is removed from this MIB definition.
+         'FrameType' is now included in ATSL-TDM-PORT-MIB. 'FrameType' is now
+         added to the import list from the 'ATSL-TDM-PORT-MIB' module."
+    REVISION     "201412230000Z" -- 23 December, 2014
+    DESCRIPTION
+        "The 'tdmPortModeTable' and 'tdmPortLineTable' have been imported from
+         the ATSL-TDM-PORT-MIB with the names 'e1PortModeTable' and
+         'e1PortLineTable'.
+
+         Some fields in the 'e1PortLineTable' have been deleted or customized
+         for ITU-T G.703 interfaces only (not Datacom, like in previous
+         versions): 'e1PortLineRateMultiplier', 'e1PortLineRateUser' are
+         deleted, 'e1PortLineRate' is modified. 'e1PortLineE0Interface' and
+         'e1PortLineE0ClockRole' are new OIDs added in this version of the
+         MIB."
+    REVISION     "201412180000Z" -- 18 December, 2014
+    DESCRIPTION
+        "The MIB name has been changed to 'ATSL-E1-PORT-MIB.txt' from
+         'ATSL-E1-GENERATOR-MIB.txt'. Module identity has changed to 'e1Port'.
+         OID prefixes and comments have been upgraded to match the new
+         terminology.
+
+         The structure corresponding to the 'e1PortNfasTable' has changed. The
+         previous implementation based on a triple index approach has changed to
+         a double index structure: 'e1PortNfasIndexBlock' and
+         'e1PortNfasIndexFrame'."
+    REVISION     "201409180000Z" -- 18 September, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 20 }
+
+--
+-- Textual conventions
+--
+
+--
+-- Top level module structure
+--
+
+e1PortControl      OBJECT IDENTIFIER ::= { e1Port 1 }
+
+--
+-- Transmission enable / disable control group
+--
+
+e1PortEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops traffic generation in the managed entity. The action
+         starts generation through all the available blocks. The number of
+         monitoring blocks may not be the same for different managed entities
+         and it may be that there is only one monitoring block for some of
+         them."
+    ::= { e1PortControl 1 }
+
+e1AddDropSource OBJECT-TYPE
+    SYNTAX            TdmInterface
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Some agents can be configured to add / drop E1 timeslots to / from
+         an external datacom or G.703 64 kb/s interface. To do that, the agent
+         has to be configured either in E1 endpoint or E1 monitor mode and the
+         external interface has to be properly configured. It is also required
+         to select the port to be used to add / drop time slots. To do that
+         the 'e1AddDropSource' OID has to be configured in the agent to either
+         'datacom' or 'g703e0'."
+    ::= { e1PortControl 2 }
+
+e1AudioOutputSource OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          none (0),
+                          tone (1),
+                          portPrimary (2),
+                          portSecondary (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Some agents have the capability to add / drop time slots from / to an
+         analogue port. The agent is able to encode the audio signal from the
+         microphone and add it to the 2048 kb/s frame or to drop a selected time
+         slot to a speaker connected to the audio port. In this case, it may
+         be necessary to configure the origin of the signal to be sent to the
+         speaker. The possible configurations are:
+
+         - 'none': The audio output is disconnected. No signal is sent to the
+           analogue output.
+
+         - 'tone': The signal from the internal tone generator is sent to the
+           analogue output.
+
+         - 'portPrimary': The signal from a selected time slot in the primary
+           TDM test port is sent to the analogue output. If the agent has only
+           one TDM port supporting 2048 kb/s framed signals this is the only
+           external data source available.
+
+         - 'portSecondary': The signal from a selected time slot in the
+           secondary TDM test port is sent to the analogue output. This
+           configuration applies only to agents with two TDM test ports."
+    ::= { e1PortControl 3 }
+
+--
+--  E1 line configuration table
+--
+
+e1PortLineTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1PortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 'e1PortLineTable' table configures some of the basic physical
+         operation parameters for TDM transmission and reception. Some of these
+         include the connector, line code, bit rate and the clock source. Some
+         of these settings may be relevant only for a subset of the supported
+         interfaces. For example, E1 interfaces are not allowed to work at bit
+         rates other than 2048 kb/s."
+    ::= { e1Port 2 }
+
+e1PortLineEntry OBJECT-TYPE
+    SYNTAX            E1PortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { e1PortLineIndex }
+    ::= { e1PortLineTable 1 }
+
+E1PortLineEntry ::= SEQUENCE {
+    e1PortLineIndex               TableIndex,
+    e1PortLineBlockName           DisplayString,
+    e1PortLineConnector           ConnectorType,
+    e1PortLineConnectionMode      INTEGER,
+    e1PortLineRate                INTEGER,
+    e1PortLineE0Interface         INTEGER,
+    e1PortLineE0ClockRole         INTEGER,
+    e1PortLineTxCode              INTEGER,
+    e1PortLineRxCode              INTEGER,
+    e1PortLineTxClock             INTEGER,
+    e1PortLineFrequencyDeviation  Real32,        
+    e1PortLineStatus              RowStatus
+}
+
+e1PortLineIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1PortLineEntry 1 }
+
+e1PortLineBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1PortLineEntry 2 }
+
+e1PortLineConnector OBJECT-TYPE
+    SYNTAX            ConnectorType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Selects the connector for a test port from the available options
+         defined by the 'ConnectorType' textual convention. Depending on the
+         particula interfaces supported by the test port, only a subset of
+         the connectors may be available. Some interfaces may not require
+         the configuration of a physical connector. In this case, this field
+         could be configured as 'unspecified'."
+    ::= { e1PortLineEntry 3 }
+
+e1PortLineConnectionMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          endpoint (0),
+                          monitor20db (1),
+                          monitor25db (2),
+                          monitor30db (3),
+                          highz (4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "It configures test port input / output impedance in those interfaces
+         supporting this feature. The available configurations for this OID
+         are listed below:
+
+         - 'endpoint': This connection represents a network termination point
+           with the nominal impedance (75 Ohm for the unbalanced port and 
+           120 Ohm for the balanced one). The expected attenuation is the
+           theoretical cable attenuation which increases with the frequency
+           square root.
+
+         - 'monitor20db': 20 dB protected monitoring point. This is a connection
+           point that is isolated from the network and it is specially suited
+           for monitoring purposes. A flat attenuation of 20 dB is expected for
+           these points.
+
+         - 'monitor25db': 25 dB protected monitoring point. This is a connection
+           point that is isolated from the network and it is specially suited
+           for monitoring purposes. A flat attenuation of 25 dB is expected for
+           these points.
+
+         - 'monitor30db': 30 dB protected monitoring point. This is a connection
+           point that is isolated form the network and it is specially suited
+           for monitoring purposes. A flat attenuation of 30 dB is expected for
+           these points.
+
+         - 'highz': The port is configured with a very large input impedance.
+           This Connection mode is suited for such applications where the tester
+           has to monitor a link without disturbing the network operation and a
+           protected monitoring point is not available."
+    ::= { e1PortLineEntry 4 }
+
+e1PortLineRate OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          kbps48 (0),
+                          kbps56 (1),
+                          kbps64 (2),
+                          kbps72 (3),
+                          kbps128 (4),
+                          kbps144 (5),
+                          kbps192 (6),
+                          kbps256 (7),
+                          kbps2048 (8)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the data rate for the currently selected interface. The
+         options available for this setting depend on the actual interface
+         configured."
+    ::= { e1PortLineEntry 5 }
+
+e1PortLineE0Interface OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          codirectional (0),
+                          contradirectional (1),
+                          centralized (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+         "This is the OID that configures the E0 interface as defined in ITU-T
+          G.703. The alternatives are listed below:
+
+          - 'codirectional': It describes an interface across which the
+            information and its associated timing signal are transmitted in the
+            same direction.
+
+          - 'contradirectional': It describes an interface across which the
+            timing signals associated with both directions of transmission are
+            directed towards the subordinate equipment.
+
+          - 'centralized': It refers to the interface wherein for both
+            directions of transmission of the information signal, the associated
+            timing signals are supplied from a centralized clock, which may be
+            derived for example from certain incoming line signals."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'."
+    ::= { e1PortLineEntry 6 }
+
+e1PortLineE0ClockRole OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          subordinated (0),
+                          controlling (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+         "Configures the endpoint role in ITU-T G.703 contra-directional and
+          centralized interfaces. The co-directional interface does not require
+          a clock role configuration as transmission ends are symmetric and
+          they all behave in the same way. The available configuration options
+          are:
+
+          - 'subordinated': This is the role adopted by the equipment that
+            receives the clock in a contra-directional interface. In centralized
+            interfaces, all transmission ends should be configured in
+            subordinated mode.
+
+          - 'controlling': In contra-directional interfaces, this mode
+            corresponds with the synchronization master, the equipment that
+            supplies the timing signal. In centralized mode, this mode should
+            be configured in the 'central' node. The equipment that supplies
+            the timing signal to both transmission ends."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'."
+    ::= { e1PortLineEntry 7 }
+
+
+e1PortLineTxCode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          hdb3 (0),
+                          ami (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Transmitted line code. The line code provides correct levels, pulse
+         shapes and bit encoding rules for baseband transmission over an
+         electrical interface. The possible configurations for this OID are:
+
+         - 'hdb3': High-density bipolar with three zeroes. Line code that
+           alternates polarity when a binary '1' is to be transmitted and
+           replaces series of four bits that are equal to '0' by reserved words
+           that violate the alternating polarity rule but they keep the DC
+           balanced. The replacement rule helps preserving the timing
+           information.
+
+         - 'ami': Alternate mark inversion. Line code that alternates polarity
+           when a binary '1' is to be transmitted. It does not have a zero
+           replacement rule. That means that this code has difficulties
+           preserving timing information when long zero sequences are
+           transmitted."
+    ::= { e1PortLineEntry 8 }
+
+e1PortLineRxCode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          hdb3 (0),
+                          ami (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Received line code. The line code provides correct levels, pulse shapes
+         and bit encoding rules for baseband reception over an electrical
+         interface. The possible configurations for this OID are:
+
+         - 'hdb3': High-density bipolar with three zeroes. Line code that
+           alternates polarity when a binary '1' is to be transmitted and
+           replaces series of four bits that are equal to '0' by reserved words
+           that violate the alternating polarity rule but they keep the DC
+           balanced. The replacement rule helps preserving the timing
+           information.
+
+         - 'ami': Alternate mark inversion. Line code that alternates polarity
+           when a binary '1' is to be transmitted. It does not have a zero
+           replacement rule. That means that this code has difficulties
+           preserving timing information when long zero sequences are
+           transmitted."
+    ::= { e1PortLineEntry 9 }
+
+e1PortLineTxClock OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          synthesized (0),
+                          recovered (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Clock source for the transmitter. These are the options available for
+         this setting:
+
+         - 'synthesized': It is used the clock signal internally generated by
+           the agent. The synthesized clock may be synchronized to an external
+           source such as a GPS clock in some agents. This setting can be used
+           to check potential synchronization impairments in the network.
+
+         - 'recovered': The clock signal recovered from the receiver is used by
+           the transmitter of the same port. This setting is used to synchronize
+           the agent with the DUT / SUT. Timing differences between the agent
+           and the DUT / SUT are therefore compensated."
+    ::= { e1PortLineEntry 10 }
+
+e1PortLineFrequencyDeviation OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        " Frequency offset applied to the transmitter clock. This feature is
+          useful to stress the DUT / SUT."
+    ::= { e1PortLineEntry 11 }
+
+e1PortLineStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1PortLineTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the encoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1PortLineEntry 12 }
+
+--
+--  E1 Frame configuration table
+--
+
+e1PortFrameTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1PortFrameEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "E1 agents with traffic generation capabilities may generate different
+         kinds of 2048 kb/s framed and unframed signals. This table provides the
+         resources required to configure frame structure and content.
+
+         E1 Communication consist on continuous transmission of frames
+         consisting on 32 time slots of 8 bits each. Frame synchronization is
+         achieved by sending an indication showing the position of the first
+         time interval of each frame, so that, since the receiver knows to which
+         channel the information in each time slot corresponds, it can
+         demultiplex correctly. This way, the bytes received in each slot are
+         assigned to the correct channel.
+
+         E1 frames may optionally include a CRC-4 code in the first time slot
+         (TS0). The CRC-4 reports the occurrence of one or more bit errors in a
+         specific group of data. The CRC-4 also prevents loss of synchronization
+         due to the coincidental appearance of the sequence '0011011' in a time
+         slot other than the TS0.
+
+         Call signalling in E1 systems may be based in different mechanisms. One
+         of them is the Channel Associated Signalling (CAS). In CAS signalling,
+         a signalling channel is associated with each information channel (there
+         is no common signalling channel), meaning that the signalling circuits
+         are personalized for each time slot."
+    ::= { e1Port 3 }
+
+e1PortFrameEntry OBJECT-TYPE
+    SYNTAX            E1PortFrameEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { e1PortFrameIndex }
+    ::= { e1PortFrameTable 1 }
+
+E1PortFrameEntry ::= SEQUENCE {
+    e1PortFrameIndex              TableIndex,
+    e1PortFrameBlockName          DisplayString,
+    e1PortFrameTxStructure        FrameType,
+    e1PortFrameRxStructure        FrameType,
+    e1PortFrameCasSpareBit0       TruthValue,
+    e1PortFrameCasSpareBit1       TruthValue,
+    e1PortFrameCasSpareBit3       TruthValue,
+    e1PortFrameStatus             RowStatus
+}
+
+e1PortFrameIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1PortFrameEntry 1 }
+
+e1PortFrameBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1PortFrameEntry 2 }
+
+e1PortFrameTxStructure OBJECT-TYPE
+    SYNTAX            FrameType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the E1 frame structure for the test port transmitter. The allowed
+         framing structures are PCM31 (32 time slots with FAS in TS0), PCM31C
+         (32 time slots with FAS and CRC-4 multiframe in TS0), PCM30 (32 time
+         slots with FAS in TS0 and CAS multiframe in TS16), PCM30C (32 time
+         slots with FAS word and CRC-4 multiframe in TS0 and CAS multiframe in
+         TS16). Unframed operation is also supported."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1PortFrameEntry 3 }
+
+e1PortFrameRxStructure OBJECT-TYPE
+    SYNTAX            FrameType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the E1 frame structure for the test port receiver. The allowed
+         framing structures are PCM31 (32 time slots with FAS in TS0), PCM31C
+         (32 time slots with FAS and CRC-4 multiframe in TS0), PCM30 (32 time
+         slots with FAS in TS0 and CAS multiframe in TS16), PCM30C (32 time
+         slots with FAS word and CRC-4 multiframe in TS0 and CAS multiframe in
+         TS16). Unframed operation is also supported."
+    REFERENCE
+        "- ITU-T G.704: Synchronous frame structures used at 1544, 6312, 2048,
+           8448 and 44736 kbit/s hierarchical levels'."
+    ::= { e1PortFrameEntry 4 }
+
+e1PortFrameCasSpareBit0 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the value of the CAS spare bit 0 located in the first frame
+         of the CAS multiframe.
+
+         Configuration of this OID does not make sense if the frame structure
+         does not have a CAS multiframe ('e1GenFrameTxStructure' is configured
+         to 'pcm30' or 'pcm30c'."
+    ::= { e1PortFrameEntry 5 }
+
+e1PortFrameCasSpareBit1 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the value of the CAS spare bit 1 located in the first frame
+         of the CAS multiframe.
+
+         Configuration of this OID does not make sense if the frame structure
+         does not have a CAS multiframe ('e1GenFrameTxStructure' is configured
+         to 'pcm30' or 'pcm30c'."
+    ::= { e1PortFrameEntry 6 }
+
+e1PortFrameCasSpareBit3 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the value of the CAS spare bit 3 located in the first frame
+         of the CAS multiframe.
+
+         Configuration of this OID does not make sense if the frame structure
+         does not have a CAS multiframe ('e1GenFrameTxStructure' is configured
+         to 'pcm30' or 'pcm30c'."
+    ::= { e1PortFrameEntry 7 }
+
+e1PortFrameStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1PortFrameTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1PortFrameEntry 8 }
+
+--
+--  E1 Multiplexer configuration table
+--
+
+e1PortMuxTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1PortMuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 'e1PortMuxTable' includes 32 rows, one for each time slot present in
+         the E1 frame. For each time slot the table specifies a particular data
+         source, including internally or externally generated data.
+
+         There is one 'e1PortMuxTable' for each test port. Tables are      
+         distinguished through the value of 'e1PortFrameIndex'. This index is
+         also used to tie the 'e1PortMuxTable' to an specific row of the
+         'e1PortFrameTable'."
+    ::= { e1Port 4 }
+
+e1PortMuxEntry OBJECT-TYPE
+    SYNTAX            E1PortMuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { e1PortMuxIndexBlock, e1PortMuxIndexTimeSlot }
+    ::= { e1PortMuxTable 1 }
+
+E1PortMuxEntry ::= SEQUENCE {
+    e1PortMuxIndexBlock           TableIndex,
+    e1PortMuxIndexTimeSlot        TableIndex,
+    e1PortMuxBlockName            DisplayString,
+    e1PortMux                     TimeSlotUse,
+    e1PortMuxStatus               RowStatus
+}
+
+e1PortMuxIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1PortMuxEntry 1 }
+
+e1PortMuxIndexTimeSlot OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each timeslot of the
+         generated frames.  Values are assigned contiguously
+         starting from 1. The value for each block index remains constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { e1PortMuxEntry 2 }
+
+e1PortMuxBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1PortMuxEntry 3 }
+
+e1PortMux OBJECT-TYPE
+    SYNTAX            TimeSlotUse
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a data source for the current time slot. This data source
+         could be internal (test pattern generator, tone generator) or external
+         (data communications port, G.703 co-directional port, analogue port or
+         a time slot received in the current test port)."
+    ::= { e1PortMuxEntry 4 }
+
+e1PortMuxStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1PortMuxTable'. Enables dynamic creation / deletion
+         of table entries in the current table. Information contained in the
+         table entry may not be available for read / write operations if the
+         status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1PortMuxEntry 5 }
+
+--
+--  E1 Demultiplexer configuration table
+--
+
+e1PortDemuxTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1PortDemuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 'e1PortDemuxTable' includes 32 rows, one for each time slot present
+         in the E1 frame. For each time slot the table specifies a particular
+         data sink, including internal analysis blocks or external destinations.
+
+         There is one 'e1PortMuxTable' for each test port. Tables are      
+         distinguished through the value of 'e1PortFrameIndex'. This index is
+         also used to tie the 'e1PortDemuxTable' to an specific row of the
+         'e1PortFrameTable'."
+    ::= { e1Port 5 }
+
+e1PortDemuxEntry OBJECT-TYPE
+    SYNTAX            E1PortDemuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { e1PortDemuxIndexBlock, e1PortDemuxIndexTimeSlot }
+    ::= { e1PortDemuxTable 1 }
+
+E1PortDemuxEntry ::= SEQUENCE {
+    e1PortDemuxIndexBlock         TableIndex,
+    e1PortDemuxIndexTimeSlot      TableIndex,
+    e1PortDemuxBlockName          DisplayString,
+    e1PortDemux                   TimeSlotUse,
+    e1PortDemuxStatus             RowStatus
+}
+
+e1PortDemuxIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each frame monitoring 
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1PortDemuxEntry 1 }
+
+e1PortDemuxIndexTimeSlot OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each timeslot of the
+         monitored frames.  Values are assigned contiguously  starting from 1.
+         The value for each block index remains constant at least from one
+         re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { e1PortDemuxEntry 2 }
+
+e1PortDemuxBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1PortDemuxEntry 3 }
+
+e1PortDemux OBJECT-TYPE
+    SYNTAX            TimeSlotUse
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a destination for the current time slot. This destination
+         could be internal (test pattern analyser, tone generator) or external
+         (data communications port, G.703 co-directional port or analogue
+         port)."
+    ::= { e1PortDemuxEntry 4 }
+
+e1PortDemuxStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1PortDemuxTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1PortDemuxEntry 5 }
+
+--
+--  E1 CAS configuration table
+--
+
+e1PortCasTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1PortCasEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains configuration of the Channel Association Signalling
+         (CAS) multiframe.  There is one 'e1PortCasTable' for each test port.
+         Tables are distinguished through the value of 'e1PortFrameIndex'.
+         This index is also used to tie the 'e1PortCasTable' to an specific row
+         of the 'e1PortFrameTable'. 
+
+         As well as transmitting information generated by the users of a 
+         telephone network, it is also necessary to transmit signalling
+         information. Signalling refers to the protocols that must be
+         established between exchanges so that the users can exchange
+         information one each other. There are signals that indicate when a
+         subscriber has picked up the telephone, when he or she can start to
+         dial a number, and when another subscriber calls, and so on. The CAS
+         signalling mechanism is defined in the ITU-T Recommendation G.704,
+         which defines the structure of the E1 frame.
+
+         In CAS signalling, a signalling channel is associated with each
+         information channel (there is no common signalling channel), meaning
+         that the signalling circuits are personalized for each channel. CAS
+         assigns to each 64 kb/s telephone channel a 2 kb/s for signalling. This
+         signalling is formed by a word of 4 bits (generically known as A, B, C,
+         and D) that is situated in the TS16 of all the frames sent. Each TS16
+         therefore carries the signalling for two telephone channels.
+
+         Given that there are only four signalling bits available for each
+         channel, to transmit all the signalling words from the 30 PCM channels
+         that make up a 2048 kb/s frame, it is necessary to wait until the TS16
+         of 15 consecutive frames have been received. The grouping of frames
+         defines a CAS signalling multiframe, which consists of a set of the
+         TS16 of 16 consecutive E1 frames.
+
+         Configuration of this table does not make sense if the frame structure
+         does not have a CAS multiframe ('e1PortFrameTxStructure' is configured
+         to 'pcm30' or 'pcm30c'."
+    ::= { e1Port 6 }
+
+e1PortCasEntry OBJECT-TYPE
+    SYNTAX            E1PortCasEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { e1PortCasIndexBlock, e1PortCasIndexChannel }
+    ::= { e1PortCasTable 1 }
+
+E1PortCasEntry ::= SEQUENCE {
+    e1PortCasIndexBlock           TableIndex,
+    e1PortCasIndexChannel         TableIndex,
+    e1PortCasBlockName            DisplayString,
+    e1PortCas                     ABCD,
+    e1PortCasStatus               RowStatus
+}
+
+e1PortCasIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1PortCasEntry 1 }
+
+e1PortCasIndexChannel OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each CAS channel number
+         of the generated frames.  Values are assigned contiguously
+         starting from 1. The value for each block index remains constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { e1PortCasEntry 2 }
+
+e1PortCasBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { e1PortCasEntry 3 }
+
+e1PortCas OBJECT-TYPE
+    SYNTAX            ABCD
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the ABCD CAS signalling bits for the current time slot in binary
+         format. The value in this field is a binary number between 0000 and
+         1111."
+    ::= { e1PortCasEntry 4 }
+
+e1PortCasStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1GenCasTable'. Enables dynamic creation / deletion
+         of table entries in the current table. Information contained in the
+         table entry may not be available for read / write operations if the
+         status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1PortCasEntry 5 }
+
+--
+--  E1 NFAS configuration table
+--
+
+e1PortNfasTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF E1PortNfasEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table configures the Non-Frame Alignment Signal (NFAS) defined
+         in E1 frames with CRC-4 multiframe structure. There is one
+         'e1PortNfasTable' for each test port. Tables are distinguished through
+         the value of 'e1PortFrameIndex'. This index is also used to tie the
+         'e1PortNfasTable' to an specific row of the 'e1PortFrameTable'.
+
+         The NFAS is made up of the bits of the TS0 that do not contain the
+         FAS in positions 3 to 8. This signal is sent in alternate frames
+         (frame 1, frame 3, frame 5, etc.).
+
+         The first bit of the NFAS (bit 3 of the TS0) is used to indicate that
+         an alarm has occurred at the far end of the communication. When
+         operating normally, it is set to '0,' while a value of '1' indicates
+         an alarm. The bits in positions 4 to 8 are spare bits, and they do not
+         have one single application, but can be used in a number of ways, as
+         decided by the telecommunications carrier. In accordance with the ITU-T
+         Recommendation G.704, these bits can be used in specific point-to-point
+         applications, or to establish a data link based on messages for
+         operations management, maintenance or monitoring of the transmission
+         quality, and so on. If these spare bits in the NFAS are not used, they
+         must be set to '1' in international links.
+
+         Configuration of this table does not make sense if the frame structure
+         does not have a CRC-4 multiframe ('e1PortFrameTxStructure' is configured
+         to 'pcm30c' or 'pcm31c'."
+    ::= { e1Port 7 }
+
+e1PortNfasEntry OBJECT-TYPE
+    SYNTAX            E1PortNfasEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { e1PortNfasIndexBlock, e1PortNfasIndexFrame }
+    ::= { e1PortNfasTable 1 }
+
+E1PortNfasEntry ::= SEQUENCE {
+    e1PortNfasIndexBlock          TableIndex,
+    e1PortNfasIndexFrame          TableIndex,
+    e1PortNfas                    Unsigned8,
+    e1PortNfasStatus              RowStatus
+}
+
+e1PortNfasIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { e1PortNfasEntry 1 }
+
+e1PortNfasIndexFrame OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index that identifies the frame carrying an NFAS word where. It is a 
+         number in the range between 1 and 8. One for each NFAS frame mapped in
+         the CRC-4 multiframe."
+    ::= { e1PortNfasEntry 2 }
+
+e1PortNfas OBJECT-TYPE
+    SYNTAX            Unsigned8
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the value for the NFAS spare bit specified with
+         'e1PortNfasIndexRow' and 'e1PortNfasIndexColumn'. A value of 'true'
+         corresponds with a binary '1' and 'false' corresponds with '0'."
+    ::= { e1PortNfasEntry 3 }
+
+e1PortNfasStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'e1GenNfasTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { e1PortNfasEntry 4 }
+
+END

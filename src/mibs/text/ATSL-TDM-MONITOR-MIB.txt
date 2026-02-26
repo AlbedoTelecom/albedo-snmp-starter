@@ -1,0 +1,1451 @@
+ATSL-TDM-MONITOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for TDM monitoring and performance evaluation.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter32               FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Real32, 
+    RatioPercentage, TimeIntervalMicroS                   FROM ATSL-MIB;
+
+ tdmMonitor MODULE-IDENTITY
+    LAST-UPDATED "201707200000Z" -- 20 July, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module defines configuration fields and tables required for 
+         result retrieval from a generic TDM monitor. The TDM monitor is
+         independent of any frame structure, line code or transmission speed.
+         Currently, the TDM monitor collects three different sets of results:
+         analog line resuls (frequency, level), performance tests based on
+         anomaly and defect detection and latency.
+
+         The 'tdmMonitor' does not supply any resource required to configure
+         the TDM signal or frame structure in the agent and assumes this
+         configuration as something given. It follows a list with the Scalars
+         and tables defined by the MIB:
+
+         Scalars
+
+        - 'tdmMonEnable': Starts / Stops network monitoring in the managed
+          entity. The action starts monitoring in all the available blocks. The
+          number of monitoring blocks may not be the same for different managed
+          entities and it may be that there is only one monitoring block for
+          some of them.
+
+        - 'tdmMonPerformanceStandard': Configures the ITU-T performance standard
+          to be used in the next monitoring session. This MIB module supports
+          setting of three different performance standards on the managed
+          entity: ITU-T G.821, ITU-T G.826 and ITU-T M.2100.
+
+        - 'tdmMonDelayEnable': Enables ('true') / Disables ('false') the latency 
+          test in the current monitoring session. This test  measures the 
+          propagation delay experienced by the transmitted data over a network  
+          path. To get a result it is necessary a previous configuration of a
+          valid test pattern in the transmitter and the receiver. No delay
+          result is available if the receiver detects a Loss of Sequence
+          Synchronization (LSS). The 'tdmMonDelayEnable' control cannot be 
+          modified if there is an ongoing monitoring session previously enabled 
+          with 'tdmMonEnable'.
+
+        - 'tdmMonDelayRtdOffset': Configures a fixed time offset for the RTD 
+          test in milliseconds. The value configured in this field is 
+          substracted from the latency result before being presented to the 
+          user. The 'tdmMonDelayRtdOffset' can be used to remove the effect of 
+          known delays from the RTD test result.
+
+        - 'tdmMonRtdOffsetAdjust': Configures the current RTD test result as a
+          fixed offset in the 'tdmMonRtdOffset' field. Adjusting zero offset is
+          used to calibrate the tester for RTD tests and remove the effects of
+          patch cables and other elements from the result.
+
+         Tables
+
+        - 'tdmMonLineTable': This table includes information about test results
+          that do not depend on any particular frame structure. These analogue
+          test results are related with frequency and attenuation. Some results
+          in this table are always available (it is not necessary to start a
+          monitoring session to get the metric value). These are instant
+          results, like the instantaneous value of the line frequency or
+          attenuation, that do not correspond with statistics computed over a
+          finite time period.
+
+        - 'tdmMonPerformanceTable': This table contains details about standard
+          performance tests defined by the ITU-T to be applied to different TDM
+          interfaces. Performance testing extend the ability of a basic BER
+          based on simple computation of bit errors to rate a TDM link or path.
+          The performance standards define metrics that go beyond the bit error
+          like for example the errored second, severely errored second or
+          background block error.
+
+        - 'tdmMonRtdTable': The round trip delay monitoring table contains
+          details about latency tests carried in one or several test interfaces
+          in the agent. This rount trip delay monitoring has to be enabled by
+          means the 'tdmMonRtdEnable' control. The 'tdmMonRtdEnable' control is
+          independent of the monitoring session start / stop control. Some test
+          results in this table require both of them bo be enabled.
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - AT-2048 E1 / Datacom Tester.
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION     "201707200000Z" -- 20 July, 2017
+    DESCRIPTION
+        "- 'tdmRtdTable' together with the 'tdmMonRtdEnable', 'tdmMonRtdOffset' 
+           and 'tdmMonRtdOffsetAdjust' OIDs become deprecated.
+         - The'rtdTestStatus' textual convention is renamed to 'delayTestSatus'.
+         - The 'tdmMonRtdEnable' scalar is renamed to 'tdmMonDelayEnable'.
+         - The 'tdmMonRtdOffset' scalar is renamed to 'tdmMonDelayRtdOffset' 
+           and two new scalars are defined: 'tdmMonDelayForwardOffset' and 
+           'tdmMonDelayReverseOffset'.
+         - The 'tdmMonRtdOffsetAdjust'scalar is renamed to 
+           'tdmMonDelayOffsetAdjust' and its definition is modified so that now 
+           it accepts three configuration values: 'ready', 'adjust' and 'off'.
+         - A new scalar is defined 'tdmMonLatencyMode'."
+    REVISION     "201406130000Z" -- 13 June, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 18 }
+
+--
+-- Textual conventions
+--
+
+TdmPerformanceStandard ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "ITU-T Standard associated to performance tests in TDM paths. The ITU-T
+         performance standard specify metrics such as the Errored Second (ES)
+         and the Severely Errored Second (SES) and define the mechanisms
+         required to measure these metrics in TDM links operating at different
+         speeds above or below the primary rate. The supported values of the
+         performance standard test convention are listed below:
+
+         - 'g821' (ITU-T G.821): This standard was released for first time in
+           1980 to be used in digital links operating at rates below 2048 kb/s.
+           At the time ITU-T G.821 was defined, an standard for links operating
+           at 2048 kb/s and higher was not available. This is the reason because
+           for some time, this ITU-T Recommendation was used in a very wide
+           class of connections.
+
+         - 'g826' (ITU-T G.826): It was released in 1983 for performance
+           assessment of links operating at 2048 kb/s and above. Performance
+           metrics defined in this standard are based on the concept of block (a
+           group of consecutive bits).
+
+         - 'm2100' (ITU-T M.2100): This ITU-T Recommendation provides
+           performance limits for bringing-into-service and maintenance PDH
+           paths and connections. While the G-series Recommendations define
+           long-term performance objectives to be met, M.2100 and other M-series
+           Recommendations are intended to assure that the long-term
+           requirements of the G-series are met in every cas. For this reason
+           the requirements of the M-series are tougher than those on the
+           G-series. An specific feature of M.2100 is that it allows shorter
+           test intervals than ITU-T G.821 and G.826.
+
+         To the 'g821', 'g826' y 'm2100' values, is to be added the 'none'
+         value, which enables controlling entities to use the current textual
+         convention to not select any performance test standards."
+    SYNTAX            INTEGER {
+                          none (0),
+                          g821 (1),
+                          g826 (2),
+                          m2100 (3)
+                      }
+
+DelayTestStatus ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Represents the possible test status of a delay test carried out in a 
+         TDM interface. The latency test in these interfaces is based on special 
+         marks carried within a test pattern. Receiving unexpected test pattern 
+         or a valid test pattern without the correct latency measurement marks 
+         makes any delay computation impossible.
+
+         Some of the delay test status are temporary conditions, some are error
+         conditions and some others indicate that the test result is correct.
+         These are the currently supported values for variables using the
+         'DelayTestStatus' textual convention:
+
+         - 'idle': The RTD test result is not active.
+
+         - 'done': The RTD test result is correct. The receiver has detected a
+           valid test pattern in the incomming signal and there are enough
+           latency computing marks to calculate the RTD.
+
+         - 'acquiring': This is a temporary test status that indicates that
+           the analyser is still searching for a valid test patern with latency
+           measurement marks.
+
+         - 'timeout': The latency test has failed because the receiver has been
+           unable to find a correct test pattern and latency measurement marks.
+
+         - 'nodata': The latency test has failed because the receiver has 
+           not detected measurement marks from the remote unit.
+
+         - 'sync': The latency test has failed because the reference clock
+           of the unit is not properly synchronized although it is declared
+           as synchronized. This situation is detected when the measured delay
+           is negative.
+
+         - 'lsync': The latency test has failed because the reference clock
+           of the unit has not synchronized to an external reference source
+           such as the GPS/PPS.
+
+         - 'rsync': The latency test has failed because the remote unit
+           reports that its reference clock has not synchronized to an
+           external reference source such as the GPS/PPS.
+
+         - 'loop': The one-way latency test has failed because the unit has
+           received measurement marks from itself, not from a different
+           unit.
+
+         - 'noloop': The round-trip latency test has failed because the unit has
+           received measurement marks from a different unit, not from
+           itself.
+
+         - 'error': The latency test has failed because the remote unit has
+           received incorrect measurement marks.
+           
+         - 'uncal': Delay offset calibration could not be achieved.
+         
+         - 'rvers': The one-way latency test has failed because the units 
+           are running different protocol versions."
+
+    SYNTAX            INTEGER {
+                         idle (0),
+                         done (1),
+                         acquiring (2),
+                         timeout (3),
+                         error (4),
+                         sync (5),
+                         nodata (6),
+                         rvers (7),
+                         lsync (8),
+                         rsync (9),
+                         loop (10),
+                         noloop (11),
+                         uncal (12)
+                      }
+
+--
+-- Top level module structure
+--
+
+tdmMonControl      OBJECT IDENTIFIER ::= { tdmMonitor 1 }
+
+--
+-- Monitoring enable / disable control group
+--
+
+tdmMonEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops network monitoring in the managed entity. The action
+         starts monitoring in all the available blocks. The number of monitoring
+         blocks may not be the same for different managed entities and it may
+         be that there is only one monitoring block for some of them."
+    ::= { tdmMonControl 1 }
+
+tdmMonPerformanceStandard OBJECT-TYPE
+    SYNTAX            TdmPerformanceStandard
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the ITU-T performance standard to be used in the next
+         monitoring session. This MIB module supports setting of three different
+         performance standards on the managed entity: ITU-T G.821, ITU-T G.826
+         and ITU-T M.2100."
+    ::= { tdmMonControl 2 }
+
+tdmMonDelayEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables ('true') / Disables ('false') the delay test in the current 
+         monitoring session. This test measures the propagation delay 
+         experienced by the transmitted data over a network path. To get
+         a result it is necessary a previous configuration of a valid test
+         pattern in the transmitter and the receiver. No delay result is
+         available if the receiver detects a Loss of Sequence Synchronization
+         (LSS). The 'tdmMonDelayEnable' control cannot be modified if there is 
+         an  ongoing monitoring session previously enabled with 'tdmMonEnable'."
+    ::= { tdmMonControl 3 }
+
+tdmMonDelayRtdOffset OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a fixed time offset for the RTD test in milliseconds. The
+         value configured in this field is substracted from the latency result
+         before being presented to the user. The 'tdmMonDelay RtdOffset' can be 
+         usedto remove the effect of known delays from the RTD test result."
+    ::= { tdmMonControl 4 }
+
+tdmMonDelayForwardOffset OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a fixed time offset for the forward-path delay test in 
+         milliseconds. The value configured in this field is substracted 
+         from the forward-path latency result before being presented to the 
+         user. The 'tdmMonDelayForwardOffset' can be used to remove the effect 
+         of known delays from the forward-path delay test result."
+    ::= { tdmMonControl 5 }
+
+tdmMonDelayReverseOffset OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a fixed time offset for the forward-path delay test in 
+         milliseconds. The value configured in this field is substracted from 
+         the reverse-path latency result before being presented to the user. 
+         The 'tdmMonDelayReverseOffset' can be used to remove the effect of 
+         known delays from the reverse-path delay test result."
+    ::= { tdmMonControl 6 }
+
+tdmMonDelayOffsetAdjust  OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          ready (0),
+                          adjust (1),
+                          off (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Adjusts the zero-offset test result with a fixed offset that is 
+         configured in three OIDs: 'tdmMonDelayForwardOffset', 
+         'tdmMonDelayReverseOffset', 'tdmMonDelayRtdOffset'. The 
+         offset can be either automatically adjusted or configured to custom 
+         values. The description of the accepted configurations for this OID 
+         is as follows:
+
+         - 'ready': This value means that the offset has been automatically 
+           configured and added to the 'tdmMonDelayForwardOffset', 
+           'tdmMonDelayReverseOffset', 'tdmMonDelayRtdOffset'.
+
+         - 'adjust': This configuration value constitutes de command that 
+           triggers automatic measurement of zero offset values. Once the 
+           latencies are calibrated the 'adjust' value changes to 'ready' 
+           without intervention of the controlling entity.
+
+         - 'off': No delay compensation values are computed or applied. Latency 
+           test results include internal test equipment latencies and 
+           potentially unwanted line delays due to patch cords and other 
+           devices."
+    ::= { tdmMonControl 7 }
+
+tdmMonDelayMode  OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          twoway (0),
+                          oneway (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the latency test mode. It can be one-way or two-way. The 
+        details are as follows
+
+         - 'twoway': It computes the delay between the test unit and the remote  
+           end and back. A loopback has to be installed in the remote end so 
+           that the test pattern is received back in the test unit. The test
+           engine then compares certain marks in the transitted and received
+           test pattern. This test requires no external synchronization but it
+           cannnot conpute forward and reverse path delay or asymmetry.
+
+         - 'oneway': Measures the forward and reverse path delay and from this 
+           information also calculates the round trip delay and delay 
+           asymmetry. This time the test method is based on the comparison made 
+           between the locally generated pattern and the pattern received from 
+           a unit installed in the far end. The remote end unit is expected to 
+           be configured with the same settings than the local unit. The 
+           owe-way delay test requires external GNSS synchronization."
+    ::= { tdmMonControl 8 }
+    
+    
+--
+--  TDM Line results table
+--
+
+tdmMonLineTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdmMonLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table includes information about test results that do not depend
+         on any particular frame structure. These analogue test results
+         are related with frequency and attenuation.
+         
+         Some results in this table are always available (it is not necessary
+         to start a monitoring session to get the metric value). These are
+         instant results, like the instantaneous value of the line frequency
+         or attenuation, that do not correspond with statistics computed over a
+         finite time period."
+    ::= { tdmMonitor 2 }
+
+tdmMonLineEntry OBJECT-TYPE
+    SYNTAX            TdmMonLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing TDM line statistics corresponding to a
+         particular monitoring block."
+    INDEX { tdmMonLineIndex }
+    ::= { tdmMonLineTable 1 }
+
+TdmMonLineEntry ::= SEQUENCE {
+    tdmMonLineIndex               TableIndex,
+    tdmMonLineBlockName           DisplayString,
+    tdmMonLineAttenuation         Real32,
+    tdmMonLineAttenuationMax      Real32,
+    tdmMonLineFrequency           Real32,
+    tdmMonLineDeviation           Real32,
+    tdmMonLineDeviationMax        Real32,
+    tdmMonLineStatus              RowStatus
+}
+
+tdmMonLineIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { tdmMonLineEntry 1 }
+
+tdmMonLineBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { tdmMonLineEntry 2 }
+
+tdmMonLineAttenuation OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dB"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Instantaneous value of the attenuation associated to the incoming
+         signal expressed in dB. The reference level to compute de attenuation
+         from the received signal follows ITU-T G.703.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'tdmMonEnable'."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'."
+    ::= { tdmMonLineEntry 3 }
+
+tdmMonLineAttenuationMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dB"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum value of the attenuation associated to the incoming signal
+         expressed in dB. It corresponds with the maximum value recorded for
+         the 'tdmMonLineAttenuation' result computed from the beginning of the
+         monitoring session."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { tdmMonLineEntry 4 }
+
+tdmMonLineFrequency OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Hz"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Instantaneous value of the frequency computed for the incoming signal
+         and expressed in Hertz (Hz).
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'tdmMonEnable'."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { tdmMonLineEntry 5 }
+
+tdmMonLineDeviation OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Instantaneous value of the frequency offset (compared with the nominal
+         line frequency) for the incoming signal expressed in parts per million
+         (ppm).
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'tdmMonEnable'."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { tdmMonLineEntry 6 }
+
+tdmMonLineDeviationMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum value of the frequency offset associated to the incoming
+         signal expressed in parts per million (ppm). This result corresponds
+         with the maximum value recorded for the 'tdmMonLineDeviation' result
+         computed from the beginning of the monitoring session."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'"
+    ::= { tdmMonLineEntry 7 }
+
+tdmMonLineStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'tdmMonLineTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdmMonLineEntry 8 }
+
+--
+--  TDM Performance results table
+--
+
+tdmMonPerfTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdmMonPerfEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains details about standard performance tests defined
+         by the ITU-T to be applied to different TDM interfaces. Performance
+         testing extend the ability of a basic BER based on simple computation
+         of bit errors to rate a TDM link or path. The performance standards
+         define metrics that go beyond the bit error like for example the
+         errored second, severely errored second or background block error."
+    ::= { tdmMonitor 3 }
+
+tdmMonPerfEntry OBJECT-TYPE
+    SYNTAX            TdmMonPerfEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing TDM performance statistics corresponding to a
+         particular monitoring block."
+    INDEX { tdmMonPerfIndex }
+    ::= { tdmMonPerfTable 1 }
+
+TdmMonPerfEntry ::= SEQUENCE {
+    tdmMonPerfIndex               TableIndex,
+    tdmMonPerfBlockName           DisplayString,
+    tdmMonPerfEsNear              Counter32,
+    tdmMonPerfEsNearPercent       RatioPercentage,
+    tdmMonPerfSesNear             Counter32,
+    tdmMonPerfSesNearPercent      RatioPercentage,
+    tdmMonPerfUasNear             Counter32,
+    tdmMonPerfUasNearPercent      RatioPercentage,
+    tdmMonPerfBbeNear             Counter32,
+    tdmMonPerfBbeNearPercent      RatioPercentage,
+    tdmMonPerfDmNear              Counter32,
+    tdmMonPerfDmNearPercent       RatioPercentage,
+    tdmMonPerfEsFar               Counter32,
+    tdmMonPerfEsFarPercent        RatioPercentage,
+    tdmMonPerfSesFar              Counter32,
+    tdmMonPerfSesFarPercent       RatioPercentage,
+    tdmMonPerfUasFar              Counter32,
+    tdmMonPerfUasFarPercent       RatioPercentage,
+    tdmMonPerfBbeFar              Counter32,
+    tdmMonPerfBbeFarPercent       RatioPercentage,
+    tdmMonPerfStatus              RowStatus
+}
+
+tdmMonPerfIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { tdmMonPerfEntry 1 }
+
+tdmMonPerfBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { tdmMonPerfEntry 2 }
+
+tdmMonPerfEsNear OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Near-end Errored Second. An ES is a second which contains at least one
+         bit error (ITU-T G.821, M.2100) or a second which con tains one or more
+         errored blocks or at least a defect (ITU-T G.826).
+
+         The ITU-T G.826 and M.2100 standards use out-of-service and in-service
+         anomalies and defects to compute the ES. The ITU-T G.821 takes into
+         account out-of-service events only."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 3 }
+
+tdmMonPerfEsNearPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected Near-end ES events and the
+         testing time expressed in seconds from the beginning of the monitoring
+         session. Definition of a 'ES' event follows the description given in
+         this MIB within 'tdmMonPerfEsNear'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 4 }
+
+tdmMonPerfSesNear OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Near-end Severely Errored Second. A SES is defined as a second with
+         a BER worse than 10-3 (ITU-T G.821, M.2100) or a second with 30% or
+         more of errored blocks or at least a defect (ITU-T G.826).
+
+         The ITU-T G.826 and M.2100 standards use out-of-service and in-service
+         anomalies and defects to compute the SES. The ITU-T G.821 takes into
+         account out-of-service events only."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 5 }
+
+tdmMonPerfSesNearPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected Near-end SES events and the 
+         testing time expressed in seconds from the beginning of the  monitoring
+         session. Definition of a 'SES' event follows the description given in
+         this MIB within 'tdmMonPerfSesNear'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 6 }
+
+tdmMonPerfUasNear OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Near-end Unavailable Second. It is a sequence that contains 10 or more
+         consecutive SES detected in the near end of the communication path. A
+         sequence of UAS is not considered to finish before at least ten
+         consecutive non-SES have occurred.
+
+         The same definition of Unavailable Second applies to G.821, G.826 and
+         M.2100."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 7 }
+
+tdmMonPerfUasNearPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Near-end Unavailable Second Percentage. It is the percentage of
+         near-end unavailable seconds to the total amount of test seconds
+         (seconds from the beginning of the monitoring session). A Definition of
+         an unavailable second is given in this MIB within 'tdmMonPerfUasNear'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 8 }
+
+tdmMonPerfBbeNear OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Near-end Background Block Error. It Is a near-end received block which
+         contains at least one error and it is not occurring as part of a SES.
+
+         The BBE applies only to G.826 performance measurements."
+    REFERENCE
+        "- ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate."
+    ::= { tdmMonPerfEntry 9 }
+
+tdmMonPerfBbeNearPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Near-end Background Block Error Percentage. It is the percentage of
+         near-end background block errors to the total amount of blocks received
+         from the beginning of the monitoring session. A definition of a
+         near end block error is given in this MIB within 'tdmMonPerfBbeNear'."
+    REFERENCE
+        "- ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate."
+    ::= { tdmMonPerfEntry 10 }
+
+tdmMonPerfDmNear OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "A Degraded Minute is one in which the estimated error rate exceeds
+         1.0e-6 but does not exceed 1.0e-3. Degraded Minutes are determined by
+         collecting all of the available seconds, grouping the result in 
+         60-second long groups and counting a 60-second long group as degraded
+         if the cumulative errors during the seconds present in the group exceed
+         1.0e-6.
+
+         The DM applies only to G.821 and even for this standard DM has been
+         suppressed in the more recent versions."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network."
+    ::= { tdmMonPerfEntry 11 }
+
+tdmMonPerfDmNearPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Degraded Minute Percentage. It is the ratio of degraded minutes to the
+         total amount of minutes from the beginning of the monitoring session
+         expressed as a percentage. A definition of a degraded minute is given
+         in this MIB within 'tdmMonPerfDmNear'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network."
+    ::= { tdmMonPerfEntry 12 }
+
+tdmMonPerfEsFar OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Far-end Errored Second. An ES is a second which contains at least one
+         bit error (ITU-T G.821, M.2100) or a second which con tains one or more
+         errored blocks or at least a defect (ITU-T G.826).
+
+         The ITU-T G.826 and M.2100 standards use out-of-service and in-service
+         anomalies and defects to compute the ES. The ITU-T G.821 takes into
+         account out-of-service events only."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 13 }
+
+tdmMonPerfEsFarPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected Far-end ES events and the
+         testing time expressed in seconds from the beginning of the monitoring
+         session. Definition of a 'ES' event follows the description given in
+         this MIB within 'tdmMonPerfEsFar'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 14 }
+
+tdmMonPerfSesFar OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Far-end Severely Errored Second. A SES is defined as a second with a 
+         BER worse than 10-3 (ITU-T G.821, M.2100) or a second with 30% or
+         more of errored blocks or at least a defect (ITU-T G.826).
+
+         The ITU-T G.826 and M.2100 standards use out-of-service and in-service
+         anomalies and defects to compute the SES. The ITU-T G.821 takes into
+         account out-of-service events only."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 15 }
+
+tdmMonPerfSesFarPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected Far-end SES events and the
+         testing time expressed in seconds from the beginning of the monitoring
+         session. Definition of a 'SES' event follows the description given in
+         this MIB within 'tdmMonPerfSesNear'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 16 }
+
+tdmMonPerfUasFar OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Far-end Unavailable Second. It is a sequence that contains 10 or more
+         consecutive SES detected in the near end of the communication path. A
+         sequence of UAS is not considered to finish before at least ten
+         consecutive non-SES have occurred.
+
+         The same definition of Unavailable Second applies to G.821, G.826 and
+         M.2100."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 17 }
+
+tdmMonPerfUasFarPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Far-end Unavailable Second Percentage. It is the percentage of far-end
+         unavailable seconds to the total amount of test seconds (seconds from
+         the beginning of the monitoring session). A Definition of an
+         unavailable second is given in this MIB within 'tdmMonPerfUasNear'."
+    REFERENCE
+        "- ITU-T G.821: Error performance of an international digital connection
+           forming part of an integrated services digital network.
+
+         - ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate.
+
+         - ITU-T M.2100: Performance limits for bringing-into-service and
+           maintenance of international PDH paths, sections and transmission
+           systems."
+    ::= { tdmMonPerfEntry 18 }
+
+tdmMonPerfBbeFar OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Far-end Background Block Error. It Is a far-end received block which
+         contains at least one error and it is not occurring as part of a SES.
+
+         The BBE applies only to G.826 performance measurements."
+    REFERENCE
+        "- ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate."
+    ::= { tdmMonPerfEntry 19 }
+
+tdmMonPerfBbeFarPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Far-end Background Block Error Percentage. It is the percentage of
+         far-end background block errors to the total amount of blocks received
+         from the beginning of the monitoring session. A definition of a
+         near end block error is given in this MIB within 'tdmMonPerfBbeNear'."
+    REFERENCE
+        "- ITU-T G.826: Error performance parameters and objectives for
+           international, constant bit rate digital paths at or above the
+           primary rate."
+    ::= { tdmMonPerfEntry 20 }
+
+tdmMonPerfStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'tdmMonPerfTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdmMonPerfEntry 23 }
+
+--
+--  TDM RTD results table
+--
+
+tdmMonRtdTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdmMonRtdEntry
+    MAX-ACCESS        not-accessible
+    STATUS            deprecated
+    DESCRIPTION
+        "The round trip delay monitoring table contains details about latency
+         tests carried in one or several test interfaces in the agent. 
+
+         This rount trip delay monitoring has to be enabled by means the
+         'tdmMonRtdEnable' control. The 'tdmMonRtdEnable' control is independent
+         of the monitoring session start / stop control. Some test results in
+         this table require both of them bo be enabled."
+    ::= { tdmMonitor 4 }
+
+tdmMonRtdEntry OBJECT-TYPE
+    SYNTAX            TdmMonRtdEntry
+    MAX-ACCESS        not-accessible
+    STATUS            deprecated
+    DESCRIPTION
+        "Table entry containing round trip delay statistics corresponding to a
+         particular monitoring block defined in the agent."
+    INDEX { tdmMonRtdIndex }
+    ::= { tdmMonRtdTable 1 }
+
+TdmMonRtdEntry ::= SEQUENCE {
+    tdmMonRtdIndex                TableIndex,
+    tdmMonRtdBlockName            DisplayString,
+    tdmMonRtdTestStatus           DelayTestStatus,
+    tdmMonRtdDelayCurrent         TimeIntervalMicroS,
+    tdmMonRtdDelayMin             TimeIntervalMicroS,
+    tdmMonRtdDelayMax             TimeIntervalMicroS,        
+    tdmMonRtdStatus               RowStatus
+}
+
+tdmMonRtdIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            deprecated
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { tdmMonRtdEntry 1 }
+
+tdmMonRtdBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            deprecated
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { tdmMonRtdEntry 2 }
+
+tdmMonRtdTestStatus OBJECT-TYPE
+    SYNTAX            DelayTestStatus
+    MAX-ACCESS        read-only
+    STATUS            deprecated
+    DESCRIPTION
+        "Displays the current testing status as one of the values accepted by
+         the 'DelayTestStatus' text convention."
+    ::= { tdmMonRtdEntry 3 }
+
+tdmMonRtdDelayCurrent OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            deprecated
+    DESCRIPTION
+        "Current delay (round-trip delay) measured from an specific test port
+         and expressed in microseconds. The value of the 'tdmMonRtdOffset' field
+         is taken into account to compute this result.
+
+         The 'tdmMonRtdDelayCurrent' result becomes available when 
+         'tdmMonRtdEnable' is configured to 'true'."
+    ::= { tdmMonRtdEntry 4 }
+
+tdmMonRtdDelayMin OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            deprecated
+    DESCRIPTION
+        "Minimum round trip delay computed from the beginning of the monitoring
+         session.
+
+         This field stores the minimum 'tdmMonRtdDelayCurrent' value. If there 
+         is not an ongoing monitoring session, then this field shows the minimum
+         delay of the last session. Computing the minimum round trip delay
+         requires both the configuration of 'tdmMonRtdEnable' to 'true' and
+         starting a monitoring session in the agent."
+    ::= { tdmMonRtdEntry 5 }
+
+tdmMonRtdDelayMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            deprecated
+    DESCRIPTION
+        "Maximum round trip delay computed from the beginning of the monitoring
+         session.
+
+         This field stores the maximum 'tdmMonRtdDelayCurrent' value. If there
+         is not an ongoing monitoring session, then this field shows the maximum
+         delay of the last session. Computing the maximum round trip delay
+         requires both the configuration of 'tdmMonRtdEnable' to 'true' and
+         starting a monitoring session in the agent."
+    ::= { tdmMonRtdEntry 6 }
+
+tdmMonRtdStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            deprecated
+    DESCRIPTION
+        "Status column for the 'tdmMonRtdTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdmMonRtdEntry 7 }
+    
+--
+--  TDM delay results table
+--
+
+tdmMonDelayTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdmMonDelayEntry
+    MAX-ACCESS        not-accessible
+    STATUS            deprecated
+    DESCRIPTION
+        "The delay monitoring table contains details about latency tests carried
+         in one or several test interfaces in the agent. This table replaces
+         the older 'tdmMonRtdTable' (now deprecated). This new table includes 
+         more results and more diagnostic tools.
+
+         Some results in this table requires external GNSS synchronization in 
+         the agent to be instaled in the near end and in the far end.
+         Configuration of synchronization soures is out of the scope of the 
+         current MIB, however.
+
+         This delay monitoring has to be enabled by means the 
+         'tdmMonDelayEnable' control. The 'tdmMonDelayEnable' control is
+         independent of the monitoring session start / stop control. Some test 
+         results in this table require both of them to be enabled."
+    ::= { tdmMonitor 5 }
+
+tdmMonDelayEntry OBJECT-TYPE
+    SYNTAX            TdmMonDelayEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing round trip delay statistics corresponding to a
+         particular monitoring block defined in the agent."
+    INDEX { tdmMonDelayIndex }
+    ::= { tdmMonDelayTable 1 }
+
+TdmMonDelayEntry ::= SEQUENCE {
+    tdmMonDelayIndex              TableIndex,
+    tdmMonDelayBlockName          DisplayString,
+    tdmMonDelayTestStatus         DelayTestStatus,
+    tdmMonDelayForwardCurrent     TimeIntervalMicroS,
+    tdmMonDelayForwardMin         TimeIntervalMicroS,
+    tdmMonDelayForwardMax         TimeIntervalMicroS,
+    tdmMonDelayReverseCurrent     TimeIntervalMicroS,
+    tdmMonDelayReverseMin         TimeIntervalMicroS,
+    tdmMonDelayReverseMax         TimeIntervalMicroS,
+    tdmMonDelayRtdCurrent         TimeIntervalMicroS,
+    tdmMonDelayRtdMin             TimeIntervalMicroS,
+    tdmMonDelayRtdMax             TimeIntervalMicroS,
+    tdmMonDelayAsymmetryCurrent   TimeIntervalMicroS,
+    tdmMonDelayAsymmetryMin       TimeIntervalMicroS,
+    tdmMonDelayAsymmetryMax       TimeIntervalMicroS,
+    tdmMonDelayRemoteHost         DisplayString,
+    tdmMonDelayStatus             RowStatus
+}
+
+tdmMonDelayIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { tdmMonDelayEntry 1 }
+
+tdmMonDelayBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { tdmMonDelayEntry 2 }
+
+tdmMonDelayTestStatus OBJECT-TYPE
+    SYNTAX            DelayTestStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the current testing status as one of the values accepted by
+         the 'DelayTestStatus' text convention."
+    ::= { tdmMonDelayEntry 3 }
+
+tdmMonDelayForwardCurrent OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current forward-path delay (near-to-remote end delay) measured from an 
+         specific test port and expressed in microseconds. The value of the 
+         'tdmMonDelayForwardOffset' field is taken into account to compute this 
+         result.
+
+         The 'tdmMonDelayForwardCurrent' result becomes available when 
+         'tdmMonDelayEnable' is configured to 'true'."
+    ::= { tdmMonDelayEntry 4 }
+
+tdmMonDelayForwardMin OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum forward-path delay computed from the beginning of the 
+         monitoring session.
+
+         This field stores the minimum 'tdmMonDelayForwardCurrent' value. If 
+         there is not an ongoing monitoring session, then this field shows the 
+         minimum delay of the last session. Computing the minimum forward-path
+         delay requires both the configuration of 'tdmMonDelayEnable' to 'true'  
+         and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 5 }
+
+tdmMonDelayForwardMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum forward-path delay computed from the beginning of the 
+         monitoring session.
+
+         This field stores the maximum 'tdmMonDelayForwardCurrent' value. If 
+         there is not an ongoing monitoring session, then this field shows the 
+         minimum delay of the last session. Computing the maximum forward-path
+         delay requires both the configuration of 'tdmMonDelayEnable' to 'true' 
+         and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 6 }
+    
+tdmMonDelayReverseCurrent OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current reverse-path delay (remote-to-near end delay) measured from an 
+         specific test port and expressed in microseconds. The value of the 
+         'tdmMonDelayReverseOffset' field is taken into account to compute this 
+         result.
+
+         The 'tdmMonDelayReverseCurrent' result becomes available when 
+         'tdmMonDelayEnable' is configured to 'true'."
+    ::= { tdmMonDelayEntry 7 }
+
+tdmMonDelayReverseMin OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum reverse-path delay computed from the beginning of the 
+         monitoring session.
+
+         This field stores the minimum 'tdmMonDelayReverseCurrent' value. If 
+         there is not an ongoing monitoring session, then this field shows the 
+         minimum delay of the last session. Computing the minimum reverse-path 
+         delay requires both the configuration of 'tdmMonDelayEnable' to 'true' 
+         and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 8 }
+
+tdmMonDelayReverseMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum reverse-path delay computed from the beginning of the 
+         monitoring session.
+
+         This field stores the maximum 'tdmMonDelayReverseCurrent' value. If 
+         there is not an ongoing monitoring session, then this field shows the 
+         minimum delay of the last session. Computing the maximum reverse-path 
+         delay requires both the configuration of 'tdmMonDelayEnable' to 'true' 
+         and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 9 }
+
+tdmMonDelayRtdCurrent OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current round-trip delay (near-to-remote and back delay) measured from 
+         an specific test port and expressed in microseconds. The value of the 
+         'tdmMonDelayRtdOffset' field is taken into account to compute this 
+         result.
+
+         The 'tdmMonDelayRtdCurrent' result becomes available when 
+         'tdmMonDelayEnable' is configured to 'true'."
+    ::= { tdmMonDelayEntry 10 }
+
+tdmMonDelayRtdMin OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum round-trip delay computed from the beginning of the 
+         monitoring session.
+
+         This field stores the minimum 'tdmMonDelayRtdCurrent' value. If there 
+         is not an ongoing monitoring session, then this field shows the minimum 
+         delay of the last session. Computing the minimum round trip delay 
+         requires both the configuration of 'tdmMonDelayEnable' to 'true' and 
+         starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 11 }
+
+tdmMonDelayRtdMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum round-trip delay computed from the beginning of the monitoring 
+         session.
+
+         This field stores the maximum 'tdmMonDelayRtdCurrent' value. If there 
+         is not an ongoing monitoring session, then this field shows the 
+         minimum delay of the last session. Computing the maximum round 
+         trip delay requires both the configuration of 'tdmMonDelayEnable' to 
+         'true' and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 12 }
+    
+tdmMonDelayAsymmetryCurrent OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current delay asymmetry (forward minus reverse path delay) measured 
+         from an specific test port and expressed in microseconds. 
+
+         The 'tdmMonDelayAsymmetryCurrent' result becomes available when 
+         'tdmMonDelayEnable' is configured to 'true'."
+    ::= { tdmMonDelayEntry 13 }
+
+tdmMonDelayAsymmetryMin OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum delay asymmetry computed from the beginning of the monitoring 
+         session.
+
+         This field stores the minimum 'tdmMonDelayAsymmetryCurrent' value. If 
+         there is not an ongoing monitoring session, then this field shows the
+         minimum delay of the last session. Computing the minimum delay 
+         asymmetry requires both the configuration of 'tdmMonDelayEnable' to 
+         'true' and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 14 }
+
+tdmMonDelayAsymmetryMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum delay asymmetry computed from the beginning of the monitoring 
+         session.
+
+         This field stores the maximum 'tdmMonDelayAsymmetryCurrent' value. If 
+         there is not an ongoing monitoring session, then this field shows the
+         minimum delay of the last session. Computing the minimum delay 
+         asymmetry requires both the configuration of 'tdmMonDelayEnable' to 
+         'true' and starting a monitoring session in the agent."
+    ::= { tdmMonDelayEntry 15 }
+
+tdmMonDelayRemoteHost OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This OID returns an string to SNMP queries to identify the remote end 
+         in one-way delay tests. One-way delay tests require two equipments to 
+         be connected to two network interfaces. The serial number 
+         corresponding to the remote end could be identified from the near end 
+         with the help of the 'tdmMonDelayRemoteHost'."
+    ::= { tdmMonDelayEntry 16 }
+
+tdmMonDelayStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'tdmMonDelay'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdmMonDelayEntry 17 }
+END

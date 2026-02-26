@@ -1,0 +1,301 @@
+ATSL-PSN-PORT-CONFIG-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Ethernet / IP port configuration
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE                         FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                            FROM SNMPv2-TC
+    atslGeneral, TableIndex, Real32                       FROM ATSL-MIB;
+
+psnPortCfg MODULE-IDENTITY
+    LAST-UPDATED "201609200000Z" -- 20 September, 2016
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB contains definition of objects required by Ethernet / IP / UDP
+         test ports to be configured, either for generation and/or
+         monitoring.
+
+         Tables
+         
+         - 'psnPortCfgPhyTable': This is a table that configures the Ethernet
+           physical layer in every test port available in the agent. The
+           Ethernet physical layer includes a physical media dependent sublayer
+           which can be electrical or optical, the auto-negotiation procedure,
+           synchronization between the communicating ends and the IEEE 802.3
+           physical coding sub-layer. The table configures the connector to be
+           used for transmitting and receiving data and the nominal bit rates
+           (auto-negotiated of forced) along with the associated parameters.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - Ether.Giga Gigabit Ethernet Tester.
+         - Ether.Sync Ethernet Syncronization Tester
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+         - Ether10.Genius 10GbE / E1/T1 / Datacom / C37.94 Tester
+         - Ether.DuaLoop Gigabit Ethernet Dual Port Reflector.
+         - Ether10.DuaLoop 10-Gigabit Ethernet Dual Port Reflector."
+    REVISION     "201609200000Z" -- 20 September, 2016
+    DESCRIPTION
+        "- Ether10.Genius tester supported.
+         - Module name changes to 'ATSL-PSN-PORT-MIB' from
+           'ATSL-PSN-PORT-CONFIG-MIB'"
+    REVISION     "201502260000Z" -- 26 February, 2015
+    DESCRIPTION
+        "- Added 10-Gigabit Ethernet support.
+         - Ether.DuaLoop and Ether10.DuaLoop testers supported."
+    REVISION     "201408010000Z" -- 1 August, 2014
+    DESCRIPTION
+        "Draft 1 public."
+
+    ::= { atslGeneral 17 }
+
+
+ConnectorType ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the connector type to be used for communication in each test
+         port. The configurations available through this textual convention are
+         RJ-45 connectors ('rj45') wich are used for electric transmission and
+         SFP connectors ('sfp') which are often used for optical transmission
+         but in some agents, they can be used for electrical transmissions
+         through special electrical transceivers as well."
+    SYNTAX            INTEGER {
+                          rj45 (0),
+                          sfp (1)
+                      }
+
+ClockRole ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the possible clock roles available in 1000BASE-T
+         communications. Unlike it happens in most of Ethernet interfaces, 
+         1 Gb/s electrical play the synchronization master or slave roles. The
+         correct role for each port in the transmission end is negotiated on 
+         link stablishment through the auto-negotiation mechanism. The available
+         configurations for the 1000BASE-T clock role are listed below:
+
+         - 'auto': The master / slave role designation is automatic and in
+           principle random.
+
+         - 'master': The synchronization master role is forced for the 
+           interface. In Synchronous Ethernet interfaces, this is the right
+           configuration for frequency offset generation.
+
+         - 'slave': The synchronization slave role is forced for the interface.
+           In synchronous Ethernet interfaces this is the right configuration
+           for frequency measurements."
+    SYNTAX            INTEGER {
+                          auto (0),
+                          master (1),
+                          slave (2)
+                      }
+
+--
+--  Physical layer configuration table
+--
+
+psnPortCfgPhyTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnPortCfgPhyEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a table that configures the Ethernet physical layer in every
+         test port available in the agent. The Ethernet physical layer includes
+         a physical media dependent sublayer which can be electrical or optical,
+         the auto-negotiation procedure, synchronization between the
+         communicating ends and the IEEE 802.3 physical coding sub-layer. The
+         table configures the connector to be used for transmitting and
+         receiving data and the nominal bit rates (auto-negotiated of forced)
+         along with the associated parameters."
+    ::= { psnPortCfg 1 }
+
+psnPortCfgPhyEntry OBJECT-TYPE
+    SYNTAX            PsnPortCfgPhyEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { psnPortCfgPhyIndex }
+    ::= { psnPortCfgPhyTable 1 }
+
+PsnPortCfgPhyEntry ::= SEQUENCE {
+    psnPortCfgPhyIndex                TableIndex,
+    psnPortCfgPhyBlockName            DisplayString,
+    psnPortCfgPhyConnector            ConnectorType,
+    psnPortCfgPhyLaserOn              TruthValue,
+    psnPortCfgPhyAutonegotiationOn    TruthValue,
+    psnPortCfgPhy1000Allowed          TruthValue,
+    psnPortCfgPhy100Allowed           TruthValue,
+    psnPortCfgPhy10Allowed            TruthValue,
+    psnPortCfgPhyClockRole            ClockRole,
+    psnPortCfgPhyForcedBitRate        INTEGER,
+    psnPortCfgPhyFrequencyDeviation   Real32,
+    psnPortCfgPhyStatus               RowStatus
+}
+
+psnPortCfgPhyIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { psnPortCfgPhyEntry 1 }
+
+psnPortCfgPhyBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { psnPortCfgPhyEntry 2 }
+
+psnPortCfgPhyConnector OBJECT-TYPE
+    SYNTAX            ConnectorType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Decides the physical connector to be used by the test port. Different
+         ports may support different kinds of connectors. Some agents may
+         support different simultaneous physical interfaces while others may
+         need to force all connectors to the same interface. Some test port may
+         not support all different transmission options. For example some port
+         may be designed for electrical transmission only."
+    ::= { psnPortCfgPhyEntry 3 }
+
+psnPortCfgPhyLaserOn OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Test ports may support and independent on / off switch for the optical
+         transmitter. This function is provided to increase the safety of the
+         optical source. It is recommended to switch the optical source on only
+         when testing."
+    ::= { psnPortCfgPhyEntry 4 }
+
+psnPortCfgPhyAutonegotiationOn OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the standard Ethernet auto-negotiation procedure
+         during the connection setup. Auto-negotiation sets the link bit rate,
+         duplex mode, flow control mode without user intervention.
+
+         Disable Auto-negotiation only if you know that the remote end does not
+         support this procedure or if you want to check link operation without
+         auto-negotiating."
+    ::= { psnPortCfgPhyEntry 5 }
+
+psnPortCfgPhy1000Allowed OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Allows / disallows the interface to negotiate the 1000 Mb/s
+         transmission rate. This is the only choice available if an optical SFP
+         transceiver for 1000BASE-X is attached to the port."
+    ::= { psnPortCfgPhyEntry 6 }
+
+psnPortCfgPhy100Allowed OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Allows / disallows the interface to negotiate the fast Ethernet speed
+         (100 Mb/s) if you are using the RJ-45 port or a compatible electrical
+         SFP for data transmission."
+    ::= { psnPortCfgPhyEntry 7 }
+
+psnPortCfgPhy10Allowed OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Allows / disallows the interface to negotiate the 10 Mb/s transmission
+         rate if you are using the RJ-45 port or a compatible electrical SFP for
+         data transmission."
+    ::= { psnPortCfgPhyEntry 8 }
+
+psnPortCfgPhyClockRole OBJECT-TYPE
+    SYNTAX            ClockRole
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the master / slave clock role in 1000BASE-T interfaces. Slaves
+         synchronize their transmitter from the clock recovered from the
+         receiver. Masters synthetize their own transmitting clock or get
+         syncrhonization from an external source (Syncrhonous Ethernet). The
+         clock role setting only makes sense if the equipment is allowed to
+         negotiate the 1000BASE-T interface over a native RJ-45 port."
+    ::= { psnPortCfgPhyEntry 9 }
+
+psnPortCfgPhyForcedBitRate OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          mbps10 (0),
+                          mbps100 (1),
+                          mbps1000 (2),
+                          gbps10 (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the forced bit rate when auto-negotiation is not enabled
+         in the test port. If auto-negotiation is not enabled, the user has
+         to configure the correct bit rate to get the link up."
+    ::= { psnPortCfgPhyEntry 10 }
+
+psnPortCfgPhyFrequencyDeviation OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Impairs the frequency of the Ethernet signal generated in the test port
+         with a frequency offset specified in parts per million (ppm). This
+         setting can be used to check how tolerant to frequency variations is a
+         network element. This is a setting only for agents supporting
+         Synchronous Ethernet."
+    ::= { psnPortCfgPhyEntry 11 }
+
+psnPortCfgPhyStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'psnPortCfgPhyTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnPortCfgPhyEntry 12 }
+
+END

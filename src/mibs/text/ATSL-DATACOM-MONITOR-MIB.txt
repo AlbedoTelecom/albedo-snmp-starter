@@ -1,0 +1,837 @@
+ATSL-DATACOM-MONITOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Data communications test port configuration.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter32               FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Unsigned8, 
+    RatioPercentage                                       FROM ATSL-MIB;
+
+dataMonitor MODULE-IDENTITY
+    LAST-UPDATED "201707170000Z" -- 17 July, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB contains the OID required to retrieve status information and
+         performance statistics from generic data communication interfaces.
+         Supported interfaces include V.24 / V.28 (synchronous and
+         asynchronous), X.21 / V.11, V.35, V.36, EIA-530 and EIA-530A but
+         the same MIB could probably be used for other interfaces without
+         modification.
+         
+         All datacom interfaces share a common reference level. There are two
+         different device types, the Data Terminal Equipment (DTE) is the
+         termination equipment. It generates and receives data. On the other
+         hand, the Data Communications Equipment is the transmission equipment
+         in charge of encoding the information for long reach data transmission.
+         
+         ---------        ---------                   ---------        ---------
+         |  DTE  |<------>|  DCE  |<--------//------->|  DCE  |<------>|  DTE  |
+         ---------        ---------                   ---------        ---------
+
+         This MIB also supports the G.703 co-directional interface because
+         this is implemented as a datacom interface in some ALBEDO SNMP
+         agents.  This interface does not share the DTE / DCE reference
+         model with other datacom standards.
+
+         The scalar OIDs and tables defined in this module are listed below:
+
+         Scalars
+
+         - 'dataMonControl': Starts / Stops network monitoring in the managed
+           entity. The action starts monitoring in all the avaialble blocks.
+           The number of monitoring blocks may not be the same for different
+           managed entities and it may be that there is only one monitoring
+           block for some of them. 
+
+         Tables
+
+         - 'dataMonAnomalies': Table that stores information about anomalies
+           recorded in a datacom link. An anomaly is defined as the smallest
+           discrepancy which can be observed between the actual and desired
+           characteristics in the data structure or content. The occurrence
+           of a single anomaly does not constitute an interruption in the
+           ability to perform a required function but it may involve temporary
+           transmission performance degradation.
+
+         - 'dataMonDefects': This is a table that contains information about
+           defects declared in data communications signals received by the agent
+           test ports. A defect is declared when the density of anomalies has
+           reached a level where the ability to perform a required function has
+           been interrupted. Defects are usually persistent indication of a
+           fault that clear only when the triggering condition has been
+           resolved.
+
+         - 'dataMonCircuitMap': This table contains the circuit map for the
+           currently enabled data communication interfaces. The circuit map
+           could be used to display real time or nearly real time status
+           information about datacom circuits. The information available in the
+           table includes both state and activity. State is supplied through an
+           'on' / 'off' (or 'zero' / 'one') result. Activity is reported by
+           means an 'idle' / 'active' result.
+
+        ALBEDO Telecom testers currently implementing this MIB module are listed
+        below:
+
+        - AT-2048 E1 / Datacom Tester.
+        - AT.One T1 / E1 / Datacom Tester.
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+        - Ether10.Genius 10GbE / E1 / Datacom / C37.94 Tester."
+    REVISION     "201707170000Z" -- 17 July, 2017
+    DESCRIPTION
+        "- References to IEEE C37.94 are deleted from the file.
+         - A new defect 'AIS' is defined to support the G.703 co-directional AIS 
+           defect."
+    REVISION     "201602080000Z" -- 8 February, 2016
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 28 }
+
+--
+-- Textual conventions
+--    
+    
+SignalIdentifier ::=TEXTUAL-CONVENTION
+    DISPLAY-HINT      "3a"
+    STATUS            current
+    DESCRIPTION
+        "Describes a textual signal identifier in the way it is commonly used
+         in data communications interfaces. Examples of common signal
+         identifiers are TD (transmit data), RX (receive data), etc. Each
+         datacom interface may define its own specific signals through
+         identifiers made up of one, two or three alphanumeric characters."
+    SYNTAX            OCTET STRING (SIZE (1..3))    
+    
+--
+-- Top level module structure
+--
+
+dataMonControl      OBJECT IDENTIFIER ::= { dataMonitor 1 }
+
+--
+-- Transmission enable / disable control group
+--
+
+dataMonEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops network monitoring in the managed entity. The action
+         starts monitoring in all the avaialble blocks. The number of monitoring
+         blocks may not be the same for different managed entities and it may
+         be that there is only one monitoring block for some of them."
+    ::= { dataMonControl 1 }
+
+    
+--
+--  Datacom Anomalies result table
+--
+
+dataMonAnomaliesTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF DataMonAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table that stores information about anomalies recorded in a datacom
+         link. An anomaly is defined as the smallest discrepancy which can be
+         observed between the actual and desired characteristics in the data
+         structure or content. The occurrence of a single anomaly does not
+         constitute an interruption in the ability to perform a required
+         function but it may involve temporary transmission performance
+         degradation.
+
+         For the particular case of data communications systems, examples of
+         anomalies are isolated bit errors (usually recorded as TSE errors by
+         test equipment) parity errors and framing errors.
+         
+         This table also includes the anomalies reported by the ITU-T G.703
+         co-directional interface, implemented as a datacom port in some
+         ALBEDO agents.  These anomalies are similar to events reported by
+         some TDM telecom equipment such as coding errors or frame alignment
+         anomalies."
+     REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'.
+           
+         - ITU-T G.806: Characteristics of transport equipment - Description
+           methodology and generic functionality."
+    ::= { dataMonitor 2 }
+
+dataMonAnomaliesEntry OBJECT-TYPE
+    SYNTAX            DataMonAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing Datacom anomaly statistics corresponding to a
+         particular monitoring block."
+    INDEX { dataMonAnomaliesIndex }
+    ::= { dataMonAnomaliesTable 1 }
+
+DataMonAnomaliesEntry ::= SEQUENCE {
+    dataMonAnomaliesIndex         TableIndex,
+    dataMonAnomaliesBlockName     DisplayString,
+    dataMonAnomaliesFrame         Counter32,
+    dataMonAnomaliesFrameRate     RatioPercentage,
+    dataMonAnomaliesFrameSeconds  Counter32,
+    dataMonAnomaliesParity        Counter32,
+    dataMonAnomaliesParityRate    RatioPercentage,
+    dataMonAnomaliesParitySeconds Counter32,
+    dataMonAnomaliesTse           Counter32,
+    dataMonAnomaliesTseRate       RatioPercentage,
+    dataMonAnomaliesTseSeconds    Counter32,
+    dataMonAnomaliesStatus        RowStatus
+}
+
+dataMonAnomaliesIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { dataMonAnomaliesEntry 1 }
+
+dataMonAnomaliesBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { dataMonAnomaliesEntry 2 }
+
+dataMonAnomaliesFrame OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Frame anomaly. The V.24 asynchronous frame does not have the correct
+         structure of start bits, data bits, parity bit and stop bits.
+         
+         This event applies to V.24 interface operating in asynchronous mode
+         only."
+    ::= { dataMonAnomaliesEntry 3 }
+
+dataMonAnomaliesFrameRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected Frame anomalies and the
+         count of all frames received from the beginning of the monitoring
+         session. The definition of a 'Frame' anomaly follows the explanation
+         given in this MIB within 'dataMonAnomaliesFrame'."
+    ::= { dataMonAnomaliesEntry 4 }
+
+dataMonAnomaliesFrameSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one Frame error accounted from
+         the beginning of the current monitoring session. Definition of the
+         'Frame' anomaly follows the explanation given in this MIB within
+         'dataMonAnomaliesFrame'."
+    ::= { dataMonAnomaliesEntry 5 }
+
+
+dataMonAnomaliesParity OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Parity anomaly. The V.24 asynchronous interface does not have the
+         correct even / odd parity. 
+         
+         This event applies to V.24 asynchronous interface with even / odd
+         parity only."
+    ::= { dataMonAnomaliesEntry 6 }
+
+dataMonAnomaliesParityRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected Parity anomalies and the
+         count of all frames received from the beginning of the monitoring
+         session. The definition of a 'Parity' anomaly follows the explanation
+         given in this MIB within 'dataMonAnomaliesParity'."
+    ::= { dataMonAnomaliesEntry 7 }
+
+dataMonAnomaliesParitySeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one Parity error accounted from
+         the beginning of the current monitoring session. Definition of the
+         'Parity' anomaly follows the explanation given in this MIB within
+         'dataMonAnomaliesParity'."
+    ::= { dataMonAnomaliesEntry 8 }
+
+dataMonAnomaliesTse OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Test Sequence Errors (TSE) detected from the beginning
+         of the monitoring session. One TSE is equivalent to a single bit
+         difference between the transmitted and the received test pattern
+         (PRBS or other)."
+    ::= { dataMonAnomaliesEntry 9 }
+
+dataMonAnomaliesTseRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total number of detected TSE anomalies and the count
+         of all bits received from the beginning of the monitoring session.
+         Definition of a 'TSE' anomaly follows the explanation given in this
+         MIB within 'dataMonAnomaliesTse'."
+    ::= { dataMonAnomaliesEntry 10 }
+
+dataMonAnomaliesTseSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one TSE anomaly accounted from
+         the beginning of the current monitoring session. Definition of the
+         'TSE' anomaly follows the explanation given in this MIB within
+         'dataMonAnomaliesTse'."
+    ::= { dataMonAnomaliesEntry 11 }
+
+dataMonAnomaliesStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'dataMonAnomaliesTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { dataMonAnomaliesEntry 12 }    
+   
+--
+--  Datacom Defects result table
+--
+
+dataMonDefectsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF DataMonDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a table that contains information about defects declared in
+         data communications signals received by the agent test ports. A defect
+         is declared when the density of anomalies has reached a level where the
+         ability to perform a required function has been interrupted. Defects
+         are usually persistent indication of a fault that clear only when the
+         triggering condition has been resolved.
+
+         For the particular case of data communications systems, examples of
+         defects are loss of clock events, and BER patter related events such as
+         the loss of synchronization sequence (LSS).
+
+         This table implements anomalies reported by ITU-T G.703 co-directional 
+         interfaces, implemented as datacom ports in some Albedo agents. These 
+         anomalies are similar to events reported by some TDM telecom equipment 
+         such as loss of signal (LOS), alarm indication signal (AIS) or remote 
+         defect indication (RDI)."
+    REFERENCE
+        "- ITU-T G.703: 'Physical / electrical characteristics of hierarchical
+           digital interfaces'.
+
+         - ITU-T G.806: Characteristics of transport equipment - Description
+           methodology and generic functionality."
+    ::= { dataMonitor 3 }
+
+dataMonDefectsEntry OBJECT-TYPE
+    SYNTAX            DataMonDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing E1 defect statistics corresponding to a
+         particular monitoring block."
+    INDEX { dataMonDefectsIndex }
+    ::= { dataMonDefectsTable 1 }
+
+DataMonDefectsEntry ::= SEQUENCE {
+    dataMonDefectsIndex           TableIndex,
+    dataMonDefectsBlockName       DisplayString,
+    dataMonDefectsLos             TruthValue,
+    dataMonDefectsLosSeconds      Counter32,
+    dataMonDefectsLoc             TruthValue,
+    dataMonDefectsLocSeconds      Counter32,
+    dataMonDefectsLss             TruthValue,
+    dataMonDefectsLssSeconds      Counter32,
+    dataMonDefectsAll0            TruthValue,
+    dataMonDefectsAll0Seconds     Counter32,
+    dataMonDefectsAll1            TruthValue,
+    dataMonDefectsAll1Seconds     Counter32,
+    dataMonDefectsSlip            TruthValue,
+    dataMonDefectsSlipSeconds     Counter32,
+    dataMonDefectsAis             TruthValue,
+    dataMonDefectsAisSeconds      Counter32,    
+    dataMonDefectsStatus          RowStatus
+}
+
+dataMonDefectsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { dataMonDefectsEntry 1 }
+
+dataMonDefectsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { dataMonDefectsEntry 2 }
+
+dataMonDefectsLos OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of signal defect. This defect is detected when no signal is
+         detected in the receiver input. The 'true' status of this field
+         corresponds with the presence of the defect in the signal.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    REFERENCE
+        "- ITU-T G.703: Physical / electrical characteristics of hierarchical 
+           digital interfaces.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { dataMonDefectsEntry 3 }
+
+dataMonDefectsLosSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LOS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LOS'
+         defect follows the explanation given in this MIB within
+         'dataMonDefectsLos'."
+    REFERENCE
+        "- ITU-T G.703: Physical / electrical characteristics of hierarchical 
+           digital interfaces.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { dataMonDefectsEntry 4 }
+
+dataMonDefectsLoc OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss Of Clock. The clock for the RD circuit (RC circuit) or the TD
+         circuit clock (TC or TTC circuits) are not available or do not have the
+         right format. This defect does not apply to V.24 operating in
+         asynchronous mode.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    ::= { dataMonDefectsEntry 5 }
+
+dataMonDefectsLocSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LOC defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LOC'
+         defect follows the explanation given in this MIB within
+         'dataMonDefectsLoc'."
+    ::= { dataMonDefectsEntry 6 }
+
+dataMonDefectsLss OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of sequence synchronization. This event indicates that the
+         expected test pattern does not match the actually received pattern.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    REFERENCE
+        "- ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above."
+    ::= { dataMonDefectsEntry 7 }
+
+dataMonDefectsLssSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the LSS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'LSS'
+         defect follows the explanation given in this MIB within
+         'e1MonDefectsLss'."
+    REFERENCE
+        "- ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above."
+    ::= { dataMonDefectsEntry 8 }
+
+dataMonDefectsAll0 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This alarm occurs when all the user bit capacity is set to '0'.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    ::= { dataMonDefectsEntry 9 }
+
+dataMonDefectsAll0Seconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'All 0' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'All 0'
+         defect follows the explanation given in this MIB within 
+         'dataMonDefectsAll0'."
+    ::= { dataMonDefectsEntry 10 }
+
+dataMonDefectsAll1 OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This alarm occurs when all the user bit capacity is set to '1'.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    ::= { dataMonDefectsEntry 11 }
+
+dataMonDefectsAll1Seconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'All 1' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'All 1'
+         defect follows the explanation given in this MIB within        
+         'dataMonDefectsAll1'."
+    ::= { dataMonDefectsEntry 12 }
+    
+dataMonDefectsSlip OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Either one bit is missing or repeated in the received test pattern.
+         This error is usually related with timing problems within the network.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    ::= { dataMonDefectsEntry 13 }
+
+dataMonDefectsSlipSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the 'Slip' defect accounted from the
+         beginning of the current monitoring session. Definition of the 'Slip'
+         defect follows the explanation given in this MIB within 
+         'dataMonDefectsSlip'."
+    ::= { dataMonDefectsEntry 14 }
+    
+dataMonDefectsAis OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Alarm indication signal. It is defined as an all-1 line signal. All
+         bits are set to '1'.
+
+         The AIS indicates a failure in the transmission source that does not
+         allow transmission of user data towards the destination. For example,
+         a regenerator that detects a LOS at its input may send an
+         AIS downstream.
+
+         This result is available even if monitoring has not been enabled in
+         the managed entity with the help of 'dataMonEnable'."
+    REFERENCE
+        "- ITU-T G.703: Physical / electrical characteristics of hierarchical 
+           digital interfaces.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { dataMonDefectsEntry 15 }
+
+dataMonDefectsAisSeconds OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing the AIS defect accounted from the
+         beginning of the current monitoring session. Definition of the 'AIS'
+         defect follows the explanation given in this MIB within 
+         'e1MonDefectsAis'."
+    REFERENCE
+        "- ITU-T G.703: Physical / electrical characteristics of hierarchical 
+           digital interfaces.
+
+         - ITU-T G.775: Loss of Signal (LOS), Alarm Indication Signal (AIS) and
+           Remote Defect Indication (RDI) defect detection and clearance
+           criteria for PDH signals."
+    ::= { dataMonDefectsEntry 16 }
+
+dataMonDefectsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'dataMonDefectsTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { dataMonDefectsEntry 17 }
+    
+--
+--  Circuit Map table
+--
+
+dataMonMapTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF DataMonMapEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains the circuit map for the currently enabled data
+         communication interfaces. The circuit map could be used to display
+         real time or nearly real time status information about datacom
+         circuits.
+         
+         The information available in the table includes both state and
+         activity. State is supplied through an 'on' / 'off' (or 'zero' / 'one')
+         result. Activity is reported by means an 'idle' / 'active' result.
+                  
+         The table is implemented through two different indexes so that there
+         is actually one table for each datacom interface / processing block.
+         Each of these interface specific tables may contain information about
+         different kinds of datacom interfaces."
+    ::= { dataMonitor 4 }
+
+dataMonMapEntry OBJECT-TYPE
+    SYNTAX            DataMonMapEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing circuit map status results corresponding to a
+         particular monitoring block."
+    INDEX { dataMonMapInterfaceIndex, dataMonMapCircuitIndex }
+    ::= { dataMonMapTable 1 }
+
+DataMonMapEntry ::= SEQUENCE {
+    dataMonMapInterfaceIndex      TableIndex,
+    dataMonMapCircuitIndex        TableIndex,
+    dataMonMapBlockName           DisplayString,
+    dataMonMapCircuit             Unsigned8,
+    dataMonMapSignal              SignalIdentifier,
+    dataMonMapCircuitDirection    INTEGER,        
+    dataMonMapCircuitActivity     INTEGER,
+    dataMonMapCircuitState        INTEGER,
+    dataMonMapStatus              RowStatus    
+}
+
+dataMonMapInterfaceIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { dataMonMapEntry 1 }
+    
+dataMonMapCircuitIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each datacom circuit to be
+         monitored. It is recommended that values are assigned contiguously
+         starting fromm 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { dataMonMapEntry 2 }
+
+dataMonMapBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { dataMonMapEntry 3 }
+    
+dataMonMapCircuit OBJECT-TYPE
+    SYNTAX            Unsigned8    
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Numeric circuit identifier. Each data communications circuit has an
+         specific numeric identifier that is stored in this field"
+    ::= { dataMonMapEntry 4 }
+    
+dataMonMapSignal OBJECT-TYPE
+    SYNTAX            SignalIdentifier
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This is an alphanumeric identifier given to the circuit. It provides
+         a short description of the circuit assigned functionality."
+    ::= { dataMonMapEntry 5 }
+    
+dataMonMapCircuitDirection OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          fromdte (0),
+                          fromdce (1)
+                      }    
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the direction of the information flow: from the DTE to the DCE
+         ('fromdte') or from the DCE to the DTE ('fromdce')."
+    ::= { dataMonMapEntry 6 }
+    
+dataMonMapCircuitActivity OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          idle (0),
+                          active (1)
+                      }    
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reports circuit activity within a certain integration period, usually
+        one second. There are two activity status:
+        
+        - 'active': At least one transition (1 to 0, 0 to 1, ON to OFF, OFF to
+          on) has occurred the integration period.
+        - 'idle': No transitions have occurred the current second period."
+    ::= { dataMonMapEntry 7 }
+    
+dataMonMapCircuitState OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          zero (0),
+                          one (1),
+                          off (2),
+                          on (3)
+                      }    
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Shows the current circuit status. Identifiers given to the states are
+         different for data and control circuits. The test unit follows ITU-T
+         V.11 and V.28 for designation of the circuit status.
+         
+         - 'zero': Corresponds to a positive voltage polarity in the circuit.
+           Applies to data circuits (TD, RD) only.
+         
+         - 'one': Corresponds to a negative voltage polarity in the circuit.
+           Applies to data circuits (TD, RD) only.
+
+         - 'on': Corresponds to a positive voltage polarity in the circuit.
+           Applies to control circuits only.
+           
+         - 'off': Corresponds to a negative voltage polarity in the circuit.
+           Applies to control circuits only.
+           
+         Depending on the current operation mode, the controlling device is
+         allowed to modify the status ('on' / 'off') of certain control
+         circuits."
+    ::= { dataMonMapEntry 8 }
+
+dataMonMapStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'dataMonMapTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { dataMonMapEntry 9 }
+    
+END

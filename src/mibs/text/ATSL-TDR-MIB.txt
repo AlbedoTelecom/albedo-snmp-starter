@@ -1,0 +1,408 @@
+ATSL-TDR-MIB DEFINITIONS ::= BEGIN
+
+--______________________________________________________________________
+--
+-- ATSL MIB objects for TDR measurements
+--______________________________________________________________________
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, TruthValue, RowStatus             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Unsigned8                    FROM ATSL-MIB;
+    
+
+tdr MODULE-IDENTITY
+    LAST-UPDATED 
+        "201701250000Z" -- 25 January, 2017
+    ORGANIZATION 
+        "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Jordi Canto
+         jcv@albedo.biz
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+         
+    DESCRIPTION
+        "This MIB module defines configuration fields for measurement  
+         control, status and result retrieval from a TDR. 
+         
+         A TDR test characterizes and locates faults in metallic 
+         conductors detecting 'discontinuities'. These 'discontinuities' 
+         are done by changes in the charateristic impedance between a 
+         pair of conductors. By definition, a 'transmission line' -TL- 
+         is a pair of conductors that has a constant chracteristic 
+         impedance at any distance point. In consequence, to be 
+         accurated and to avoid fault detections or imprecise distance 
+         measurements a TDR test should be applied exclusively over real 
+         transmission lines.
+         
+         A communications cable can contain one or more TLs. For 
+         example, coaxial cable contains only one, but an UTP cable 
+         contains 4 (because each twisted pair is a real TL). By 
+         convention, each TL of a cable is identified and referenced by 
+         a sequence number (0 index).   
+         
+         It follows a list OIDs define by the MIB:
+         
+         - tdrSetup
+         
+            - 'tdrCable': selects the cable that contains the 
+              transmission lines (TLs) that will be tested.
+          
+            - 'tdrNVP': Sets the Nominal Velocity of Propagation over 
+              the transmission lines (TLs), coded has a percentage of 
+              the speed of light.
+              Valid values: 1-100
+          
+            - 'tdrDistance: Sets the distance segment where the test
+              will be performed. A discontinuity detected beyond the 
+              selected distance will be stored has 'terminated'.
+                  
+        - tdrControl
+        
+            - 'tdrRun': Starts/Stops the measurement process on the TLs 
+              of the connected cable. The action enables the hardware 
+              interface where the selected cable is connected.    
+              
+        - tdrStatus
+  
+            - 'tdrRun': Informs about the status of the test in the 
+               managed enity (true/false).  
+               
+            - 'tdrTLNum': Informs about the number of TL owned by the 
+               selected cable. This value is set when the tdrCable is
+               selected in the setup section.
+                    
+            - 'tdrTLCurrentIndex': Contains the index (id) of the TL 
+              where the test is focused currently.
+              
+            - 'tdrCountLoop': Informs the number of completed loops. 
+         
+         tdrResults
+         
+            - 'tdrTLTable': Contains the test result for each TL of the
+              cable.
+
+      
+        ALBEDO Telecom testers currently implementing this MIB module 
+        are listed below:
+        - MetCable / Coaxial and Ethernet TDR Tester."
+     
+    REVISION     
+        "201701250000Z" -- 25 January, 2017
+    DESCRIPTION
+        "Draft 1 public"
+
+    ::= { atslGeneral 21 }
+
+
+--______________________________________________________________________
+--
+-- Textual conventions
+--______________________________________________________________________
+
+TdrCable ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Represents the type of cables implemented by the enitiy"      
+    SYNTAX
+        INTEGER {
+            coaxial   (1),
+            utp       (2)
+        }
+
+
+TdrBasicPercent ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT    "d"
+    STATUS          current
+    DESCRIPTION
+        "Conventional value that represents a percent value"      
+    SYNTAX
+        Unsigned32 (1..100)
+
+
+TdrPredefinedDistance ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Represents the preselectable distances of the test in mm"      
+    SYNTAX
+        INTEGER {
+            dist500m       (500000),
+            dist1000m      (1000000),
+            dist1500m      (1500000),
+            dist2000m      (2000000),
+            dist3000m      (3000000),
+            dist5000m      (5000000),
+            dist7500m      (7500000),
+            dist10000m     (10000000)
+        }
+        
+
+    
+        
+TdrTLIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT    "d"
+    STATUS          current
+    DESCRIPTION
+        "Identifies a Transmission Line  inside the cable"      
+    SYNTAX
+        Unsigned32 (0..127)
+        
+        
+            
+TdrTLTermination ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Represents a transmission line termination.
+        - unknown: The TL termination is unknow. This value indicates 
+          that the test has not been yet evaluated the termination.
+        - open: The termination has been evaluated and it presents a open.
+        - short: The termination has been evaluated and it presents a 
+          short circuit.
+        - terminated: The TL is terminated, or no discontinuities are 
+          detected before max distance selected by setup."   
+    SYNTAX
+        INTEGER {
+            unknown     (0),
+            measuring   (1),
+            terminated  (2),
+            open        (3),
+            short       (4)
+        }
+        
+        
+TdrTLDistance ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT    "d"
+    STATUS          current
+    DESCRIPTION
+        "Distance in mm"      
+    SYNTAX
+        Unsigned32 (0..10000000)        
+
+--______________________________________________________________________
+--
+-- Setup module structure
+--______________________________________________________________________
+
+tdrSetup        OBJECT IDENTIFIER ::= { tdr 1 }
+
+
+--
+-- tdrCable
+--
+tdrCable OBJECT-TYPE
+    SYNTAX          TdrCable 
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Selects the cable that contains the transmission lines (TLs) 
+        that will be tested."
+    ::= { tdrSetup 1 }
+    
+    
+--
+-- tdrNVP
+--    
+tdrNVP  OBJECT-TYPE
+    SYNTAX          TdrBasicPercent
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Sets the Nominal Velocity of Propagation over the TL, coded has 
+        a percentage of the speed of light. Valid values: 1-100   "
+    ::= { tdrSetup 2 }
+    
+ 
+--
+-- tdrDistance
+--
+tdrDistance OBJECT-TYPE
+    SYNTAX          TdrPredefinedDistance
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Sets the distance segment where the test will be performed. 
+        A discontinuity detected beyond the selected distance will be 
+        stored has 'terminated'."
+    ::= { tdrSetup 3 }
+   
+
+
+--______________________________________________________________________
+--
+-- Control module structure
+--______________________________________________________________________
+
+tdrControl      OBJECT IDENTIFIER ::= { tdr 2 }
+
+
+--
+-- tdrControlRun
+--
+tdrControlRun OBJECT-TYPE
+    SYNTAX          TruthValue  
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Starts / Stops tdr test in the managed entity. "
+    ::= { tdrControl 1 }
+
+
+--______________________________________________________________________
+--
+-- Status module structure
+--______________________________________________________________________
+
+tdrStatus      OBJECT IDENTIFIER ::= { tdr 3 }
+
+
+--
+-- tdrStatusRun
+--
+tdrStatusRun OBJECT-TYPE
+    SYNTAX          TruthValue  
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Informs about the status of the test in the managed enity."
+    ::= { tdrStatus 1 }
+
+--
+-- tdrTLNum
+--
+tdrTLNum OBJECT-TYPE
+    SYNTAX          TdrTLIndex  
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Informs about the number of TL owned by the selected cable. 
+        This value is set when the tdrCable is selected in the setup 
+        section."
+    ::= { tdrStatus 2 }
+    
+
+--
+-- tdrTLCurrentIndex
+--
+tdrTLCurrentIndex OBJECT-TYPE
+    SYNTAX          TdrTLIndex  
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Contains the index (id) of the TL where the test is focused 
+        currently."
+    ::= { tdrStatus 3 }
+    
+
+--
+-- tdrCountLoop
+--
+tdrCountLoop OBJECT-TYPE
+    SYNTAX          Unsigned32  
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Informs the number of completed loops."
+    ::= { tdrStatus 4 }
+               
+
+              
+
+--______________________________________________________________________
+--
+-- Results module structure
+--______________________________________________________________________
+
+tdrResults      OBJECT IDENTIFIER ::= { tdr 4 }
+
+
+
+tdrTLTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdrTLEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table that stores the detected discontinuities and distance
+        mesaurements of a test. The table has a row for each TL of the
+        cable."
+    ::= { tdrResults 1 }
+    
+ 
+ 
+tdrTLEntry OBJECT-TYPE
+    SYNTAX            TdrTLEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing detected discontinuities and distance
+        measurement corresponding to a particular TL "
+    INDEX { tdrTLIndex }
+    ::= { tdrTLTable 1 }
+     
+
+    
+TdrTLEntry ::= SEQUENCE {
+    tdrTLIndex          TableIndex,
+    tdrTLTermination    Unsigned32,
+    tdrTLDistanceUnits  Unsigned32,
+    tdrTLDistanceMils   Unsigned32,
+    tdrTLStatus         RowStatus
+}
+
+
+tdrTLIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The TL identification inside the cable."
+    ::= { tdrTLEntry 1 }
+    
+
+tdrTLTermination OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The discontinuity detected"
+    ::= { tdrTLEntry 2 }
+    
+    
+tdrTLDistanceUnits OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The distance where the discontinuity or termination has been 
+        detected (unit precission)"
+    ::= { tdrTLEntry 3 }       
+    
+tdrTLDistanceMils OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The distance where the discontinuity or termination has been 
+        detected (mills precission)"
+    ::= { tdrTLEntry 4 }       
+    
+    
+tdrTLStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'tdrTLTable'. Enables dynamic creation
+         or deletion of table entries in the current table. Information 
+         contained in the table entry may not be available for read / 
+         write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdrTLEntry 5 }    
+
+END

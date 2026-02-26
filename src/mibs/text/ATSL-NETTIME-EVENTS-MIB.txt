@@ -1,0 +1,526 @@
+ATSL-NETTIME-EVENTS-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL Net.Time events MiB
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, Unsigned32 FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue  FROM SNMPv2-TC
+    OBJECT-GROUP, NOTIFICATION-GROUP, MODULE-COMPLIANCE
+        FROM SNMPv2-CONF
+    atslNetTime                                    FROM ATSL-NETTIME-MIB;
+
+netTimeEvent MODULE-IDENTITY
+    LAST-UPDATED "202404020000Z" -- 2 April, 2024
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+
+    DESCRIPTION
+        "This MIB module defines events related resources for accessing
+         Albedo Telecom Net.Time events.
+
+         Events can be alarms and notice messages depening on its category.
+         Alarm events have major, minor and critical category.
+
+         Tables
+
+         - 'netTimeEventDefTable': Event definitions table.
+           A static table with the definitions of all events that can be
+           reported the unit.
+
+         - 'netTimeEventActiveAlarmsTable': Current active alarms table.
+           Table with currently active alarm events, one per row.
+           Note that an alarm can be declared by several origins. For example
+           a Loss of signal alarm can be declared by clk02 and ptp02 origins.
+           "
+	REVISION     "202404020000Z" -- 2 April, 2024
+    DESCRIPTION
+        "Draft 1 public."
+
+    ::= { atslNetTime 1 }
+
+netTimeEventNotifications OBJECT IDENTIFIER ::= { netTimeEvent 0 }
+netTimeEventObjects       OBJECT IDENTIFIER ::= { netTimeEvent 1 }
+netTimeEventConformance   OBJECT IDENTIFIER ::= { netTimeEvent 2 }
+
+netTimeEventControl OBJECT IDENTIFIER ::= {netTimeEventObjects 1}
+
+--
+--  Net.Time events control definitions
+--
+
+netTimeEventEnableTables OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables/Disables table creation and query of Net.Time events
+         tables.
+
+         The value of this object should be kept in nonvolatile
+         memory."
+    DEFVAL            { false }
+    ::= { netTimeEventControl 1 }
+
+netTimeEventEnableNotifications OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Indicates whether alarms notifications are generated.
+
+         The value od this object should be kept in nonvolatile
+         memory."
+    DEFVAL            { false }
+    ::= { netTimeEventControl 2 }
+
+--
+--  Net.Time events definitions table
+--
+
+netTimeEventDefTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF NetTimeEventDefEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A table with the definitions of Net.Time events.
+         This is a static table with the definitions of all events that can be
+         reported by a Net.Time unit."
+    ::= { netTimeEventObjects 2 }
+
+netTimeEventDefEntry OBJECT-TYPE
+    SYNTAX            NetTimeEventDefEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing the definition and static information of an
+         event."
+    INDEX { netTimeEventDefID }
+    ::= { netTimeEventDefTable 1 }
+
+NetTimeEventDefEntry ::= SEQUENCE {
+    netTimeEventDefID                    NetTimeEventID,
+    netTimeEventDefName                  DisplayString,
+    netTimeEventDefSubsystem             NetTimeEventSubsystem,
+    netTimeEventDefCategory              NetTimeEventCategory,
+    netTimeEventDefDescription           DisplayString,
+    netTimeEventDefOriginType            NetTimeEventOriginType
+}
+
+netTimeEventDefID OBJECT-TYPE
+    SYNTAX            NetTimeEventID
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event unique identifier."
+    ::= { netTimeEventDefEntry 1 }
+
+netTimeEventDefName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event event name or mnemonic."
+    ::= { netTimeEventDefEntry 2 }
+
+netTimeEventDefSubsystem OBJECT-TYPE
+    SYNTAX            NetTimeEventSubsystem
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event subsystem."
+    ::= { netTimeEventDefEntry 3 }
+
+netTimeEventDefCategory OBJECT-TYPE
+    SYNTAX            NetTimeEventCategory
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event category."
+    ::= { netTimeEventDefEntry 4 }
+
+netTimeEventDefDescription OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event description."
+    ::= { netTimeEventDefEntry 5 }
+
+netTimeEventDefOriginType OBJECT-TYPE
+    SYNTAX            NetTimeEventOriginType
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event origin type.
+         Each event has a unique origin type."
+    ::= { netTimeEventDefEntry 6 }
+
+--
+--  Current Net.Time active alarm events table
+--
+
+netTimeEventActiveTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF NetTimeEventActiveEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports the currently active alarm events of a Net.Time unit.
+         This table contains the ID, origin and timestamp of active major,
+         minor and critical alarm events."
+    ::= { netTimeEventObjects 3 }
+
+netTimeEventActiveEntry OBJECT-TYPE
+    SYNTAX            NetTimeEventActiveEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing an active alarm event entry."
+    INDEX { netTimeEventActiveID, netTimeEventActiveOrigin }
+    ::= { netTimeEventActiveTable 1 }
+
+NetTimeEventActiveEntry ::= SEQUENCE {
+    netTimeEventActiveID                    NetTimeEventID,
+    netTimeEventActiveOrigin                NetTimeEventOrigin,
+    netTimeEventActiveTimeStamp             NetTimeEventTimeStamp
+}
+
+netTimeEventActiveID OBJECT-TYPE
+    SYNTAX            NetTimeEventID
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Net.Time active alarm event id."
+    ::= { netTimeEventActiveEntry 1 }
+
+netTimeEventActiveOrigin OBJECT-TYPE
+    SYNTAX            NetTimeEventOrigin
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Origin of the active event."
+    ::= { netTimeEventActiveEntry 2 }
+
+netTimeEventActiveTimeStamp OBJECT-TYPE
+    SYNTAX            NetTimeEventTimeStamp
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Timestamp of the alarm activation event.
+         This is the timestamp when the alarm was set."
+    ::= { netTimeEventActiveEntry 3 }
+
+--
+-- Textual conventions
+--
+
+NetTimeEventID ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each event.
+         An event can have several origins of the event."
+    SYNTAX            Unsigned32 (1..2147483647)
+
+NetTimeEventCategory ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Event category levels. Possible values are:
+         - 'clear': Alarm or event cleared.
+         - 'notice': Notice informational event.
+         - 'minor': Minor alarm.
+         - 'major': Major alarm.
+         - 'critical': Critical alarm."
+
+    SYNTAX          INTEGER {
+                          clear(0),
+                          notice(1),
+                          minor(2),
+                          major(3),
+                          critical(4)
+                    }
+
+NetTimeEventSubsystem ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Event subsystem.
+         Subsystems generating events."
+
+    SYNTAX          INTEGER {
+                          system(0),
+                          power(1),
+                          clk(2),
+                          gnss(3),
+                          input(4),
+                          output(5),
+                          ethernet(6),
+                          ptp(7),
+                          ntp(8)
+                    }
+
+NetTimeEventOrigin ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "16a"
+    STATUS            current
+    DESCRIPTION
+        "Describes an event origin name identifying the originator of the event.
+         This string contains printable ASCII alphanumeric characters."
+    SYNTAX            OCTET STRING (SIZE (3..16))
+
+NetTimeEventOriginType ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Type of event origin"
+
+    SYNTAX          INTEGER {
+                          unspecified(0),
+                          interface(1),
+                          port(2),
+                          user(3)
+                    }
+
+NetTimeEventTimeStamp ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "2d-1d-1d,1d:1d:1d.3d,1a1d:1d"
+    STATUS       current
+    DESCRIPTION
+       "A date-time specification.  This type is similar to the
+        DateAndTime type defined in the SNMPv2-TC, except the
+        subsecond granulation is microseconds instead of
+        deciseconds.
+
+        field  octets  contents                  range
+        -----  ------  --------                  -----
+          1      1-2   year*                     0..65536
+          2       3    month                     1..12
+          3       4    day                       1..31
+          4       5    hour                      0..23
+          5       6    minutes                   0..59
+          6       7    seconds                   0..60
+                       (use 60 for leap-second)
+          7     8-10   microseconds*             0..999999
+          8      11    direction from UTC        '+' / '-'
+          9      12    hours from UTC*           0..13
+         10      13    minutes from UTC          0..59
+
+        * Notes:
+        - the value of year is in network-byte order
+        - the value of microseconds is in network-byte order
+        - daylight saving time in New Zealand is +13
+
+        For example, Tuesday May 26, 1992 at 1:30:15 PM EDT would be
+        displayed as:
+
+                        1992-5-26,13:30:15.0,-4:0
+
+        Note that if only local time is known, then timezone
+        information (fields 11-13) is not present."
+    SYNTAX      OCTET STRING (SIZE (10 | 13))
+
+
+NetTimeEventStatus ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Type of event status"
+
+    SYNTAX          INTEGER {
+                          set(0),
+                          clear(1),
+                          unespecified(2)
+                    }
+
+--
+--  Net.Time events notifications definitions
+--
+
+netTimeEventNotificationElements OBJECT IDENTIFIER ::= { netTimeEventNotifications 1 }
+
+netTimeEventNotification NOTIFICATION-TYPE
+    OBJECTS     { netTimeEventNotifyID, netTimeEventNotifyOrigin,
+                  netTimeEventNotifyTimeStamp, netTimeEventNotifyStatus }
+    STATUS      current
+    DESCRIPTION
+       "The NetTimeEventNotification is generated when an NetTime Event
+       "
+    ::= { netTimeEventNotifications 2 }
+
+netTimeEventNotifyID OBJECT-TYPE
+    SYNTAX            NetTimeEventID
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time active alarm event id."
+    ::= { netTimeEventNotificationElements 1 }
+
+netTimeEventNotifyOrigin OBJECT-TYPE
+    SYNTAX            NetTimeEventOrigin
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Origin of the active event."
+    ::= { netTimeEventNotificationElements 2 }
+
+netTimeEventNotifyTimeStamp OBJECT-TYPE
+    SYNTAX            NetTimeEventTimeStamp
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Timestamp of the alarm activation event.
+         This is the timestamp when the alarm was set."
+    ::= { netTimeEventNotificationElements 3 }
+
+netTimeEventNotifyStatus OBJECT-TYPE
+    SYNTAX            NetTimeEventStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Net.Time event status."
+    ::= { netTimeEventNotificationElements 4 }
+
+--
+--  Net.Time conformance statements
+--
+
+netTimeEventGroups      OBJECT IDENTIFIER ::= { netTimeEventConformance 1 }
+netTimeEventCompliances OBJECT IDENTIFIER ::= { netTimeEventConformance 2 }
+
+netTimeEventFullCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+       "The compliance statement for implementations of the
+        ATSL-NETTIME-EVENTS-MIB."
+    MODULE      -- this module
+    MANDATORY-GROUPS {
+        netTimeEventNotificationElementsGroup,
+        netTimeEventNotificationGroup,
+        netTimeEventControlGroup,
+        netTimeEventDefGroup,
+        netTimeEventActiveGroup
+    }
+    ::= { netTimeEventCompliances 1 }
+
+netTimeEventReadOnlyCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+       "The compliance statement for implementations of the
+        ATSL-NETTIME-EVENTS-MIB that do not support read-write access."
+    MODULE      -- this module
+    MANDATORY-GROUPS {
+        netTimeEventNotificationElementsGroup,
+        netTimeEventNotificationGroup,
+        netTimeEventControlGroup,
+        netTimeEventDefGroup,
+        netTimeEventActiveGroup
+    }
+    OBJECT netTimeEventEnableTables
+       MIN-ACCESS  read-only
+       DESCRIPTION
+          "Write access is not required."
+    OBJECT netTimeEventEnableNotifications
+       MIN-ACCESS  read-only
+       DESCRIPTION
+          "Write access is not required."
+    ::= { netTimeEventCompliances 2 }
+
+netTimeEventNotificationCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+       "The compliance statement for implementations of the
+        ATSL-NETTIME-EVENTS-MIB that generate notifications."
+    MODULE      -- this module
+    MANDATORY-GROUPS {
+
+        netTimeEventNotificationElementsGroup,
+        netTimeEventNotificationGroup,
+        netTimeEventControlGroup,
+        netTimeEventDefGroup,
+        netTimeEventActiveGroup
+    }
+    OBJECT      netTimeEventNotifyID
+    MIN-ACCESS  accessible-for-notify
+    DESCRIPTION
+        "Read access is not required."
+    OBJECT      netTimeEventNotifyOrigin
+    MIN-ACCESS  accessible-for-notify
+    DESCRIPTION
+       "Read access is not required."
+    OBJECT      netTimeEventNotifyTimeStamp
+    MIN-ACCESS  accessible-for-notify
+    DESCRIPTION
+       "Read access is not required."
+    OBJECT      netTimeEventNotifyStatus
+    MIN-ACCESS  accessible-for-notify
+    DESCRIPTION
+       "Read access is not required."
+    ::= { netTimeEventCompliances 3 }
+
+netTimeEventNotificationElementsGroup OBJECT-GROUP
+    OBJECTS {
+        netTimeEventNotifyID,
+        netTimeEventNotifyOrigin,
+        netTimeEventNotifyTimeStamp,
+        netTimeEventNotifyStatus
+    }
+    STATUS      current
+    DESCRIPTION
+       "A collection of control objects to control the enable/disable of
+        the defined tables and to enable/disable notifications."
+    ::= { netTimeEventGroups 1 }
+
+netTimeEventNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+        netTimeEventNotification
+    }
+    STATUS      current
+    DESCRIPTION
+       "The notifications emitted by this MIB module."
+    ::= { netTimeEventGroups 2 }
+
+netTimeEventControlGroup OBJECT-GROUP
+    OBJECTS {
+        netTimeEventEnableTables,
+        netTimeEventEnableNotifications
+    }
+    STATUS      current
+    DESCRIPTION
+       "A collection of control objects to control the enable/disable of
+        the defined tables and to enable/disable notifications."
+    ::= { netTimeEventGroups 3 }
+
+netTimeEventDefGroup OBJECT-GROUP
+    OBJECTS {
+        -- netTimeEventDefID,
+        netTimeEventDefName,
+        netTimeEventDefSubsystem,
+        netTimeEventDefCategory,
+        netTimeEventDefDescription,
+        netTimeEventDefOriginType
+    }
+    STATUS      current
+    DESCRIPTION
+       "A collection of objects representing the structured data
+        elements of a netTime Event definition"
+    ::= { netTimeEventGroups 4 }
+
+netTimeEventActiveGroup OBJECT-GROUP
+    OBJECTS {
+        -- netTimeEventActiveID,
+        -- netTimeEventActiveOrigin,
+        netTimeEventActiveTimeStamp
+    }
+    STATUS      current
+    DESCRIPTION
+       "A collection of objects representing the structured data
+        elements of an active netTime Event."
+    ::= { netTimeEventGroups 5 }
+
+    
+END

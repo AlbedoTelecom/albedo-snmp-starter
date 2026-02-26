@@ -1,0 +1,848 @@
+ATSL-T1-PORT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for T1 test port configuration.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Unsigned8, Real32, Word16    FROM ATSL-MIB
+    TdmInterface, ConnectorType, FrameType, 
+    ABCD, TimeSlotUse                                     FROM ATSL-TDM-PORT-MIB;
+
+ t1Port MODULE-IDENTITY
+    LAST-UPDATED "201701310000Z" -- 31 January, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB defines configuration fields and tables required for
+         configuration of a 1544 kb/s T1 test port. The T1 signal description is
+         included in standard ANSI T1-102-1999. Frame structures used in this 
+         MIB are defined in ANSI T1-403-1999 standard.
+
+         The T1 frame defines a cyclical set of 24 time slots of 8 bits. There
+         is an additional bit used for framing. The total amount of bits in
+         a T1 frame is therefore 193. Depending on the specific frame type the 
+         T1 frame may contain structures. The ESF frame defines a multiframe 
+         structure that enables error detection in the far end. There is also 
+         the possibility to use one bit in each time slot to carry signalling
+         information.
+
+                                 ------------------
+                                 |   Framing bit  |
+                                 ------------------
+                                 |                |
+                                 |      TS0       |
+                                 |                |
+                                 ------------------
+                                 |                |
+                                 |      TS1       |
+                                 |                |
+                                 ------------------
+                                 |       ...      |
+                                 ------------------
+                                 |                |
+                                 |      TS23      |
+                                 |                |
+                                 ------------------
+
+         Scalars
+
+         - 't1PortEnable': Starts / Stops traffic generation in the managed 
+           entity. The action starts generation through all the available 
+           blocks. The number of monitoring blocks may not be the same for 
+           different managed entities and it may be that there is only one 
+           monitoring block for some of them.
+
+         - 't1AddDropSource': Some agents can be configured to add / drop T1 
+           timeslots to / from an external datacom or G.703 64 kb/s interface. 
+           To do that, the agent has to be configured either in 'TDM endpoint' 
+           or 'TDM monitor' mode and the external interface has to be properly 
+           configured. It is also required to select the port to be used to add 
+           / drop time slots. To do that the 't1AddDropSource' OID has to be 
+           configured in the agent to either 'datacom' or 'g703e0'.
+
+         - 't1AudioOutputSource': Some agents have the capability to add / drop 
+           time slots from / to an analogue port. The agent is able to encode 
+           the audio signal from the microphone and add it to the 1544 kb/s 
+           frame or to drop a selected time slot to a speaker connected to the 
+           audio port. In this case, it may be necessary to configure the origin 
+           of the signal to be sent to the speaker.
+
+         Tables
+
+         - 't1PortLineTable': The 't1PortLineTable' table configures some of the 
+           basic physical operation parameters for T1 transmission and 
+           reception. Some of these include the connector, line code, bit rate 
+           and the clock source.
+
+         - 't1PortFrameTable': T1 agents with traffic generation capabilities 
+           may generate different kinds of 1544 kb/s framed and unframed 
+           signals. This table provides the resources required to configure 
+           frame structure and content. T1 Communication consist on continuous  
+           transmission of frames consisting on 24 time slots of 8 bits each. 
+           There is an additional framing bit that is inserted in every frame. 
+           The T1 frame is therefore made up of 24 x 8 + 1 bits. The same 
+           structure is repeated with a period of 125 microseconds which gives a 
+           transmission rate of 1544 kb/s.
+
+         - 't1PortMuxTable':The 't1PortMuxTable' includes 24 rows, one for each 
+           time slot present in the T1 frame. For each time slot the table 
+           specifies a particular data source, including internally or 
+           externally generated data.
+
+         - 't1PortDemuxTable': The 't1PortDemuxTable' includes 24 rows, one for 
+           each time slot present in the T1 frame. For each time slot the table 
+           specifies a particular data sink, including internal analysis blocks 
+           or external destinations.
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+        - Ether10.Genius 10GbE / E1/T1 / Datacom / C37.94 Tester"
+
+    REVISION     "201701310000Z" -- 31 January, 2017
+    DESCRIPTION
+    	"The 't1PortFrameTimeSlotRate' column has been split into two, one for TX
+    	 and another for RX, named 't1PortFrameTxTimeSlotRate' and
+    	 't1PortFrameRxTimeSlotRate', respectively."
+    	 
+    REVISION     "201609200000Z" -- 20 September, 2016
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 25 }
+
+--
+-- Top level module structure
+--
+
+t1PortControl      OBJECT IDENTIFIER ::= { t1Port 1 }
+
+--
+-- Transmission enable / disable control group
+--
+
+t1PortEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops traffic generation in the managed entity. The action
+         starts generation through all the available blocks. The number of
+         monitoring blocks may not be the same for different managed entities
+         and it may be that there is only one monitoring block for some of
+         them."
+    ::= { t1PortControl 1 }
+
+t1AddDropSource OBJECT-TYPE
+    SYNTAX            TdmInterface
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Some agents can be configured to add / drop T1 timeslots to / from
+         an external datacom or G.703 64 kb/s interface. To do that, the agent
+         has to be configured either in 'TDM endpoint' or 'TDM monitor' mode and 
+         the external interface has to be properly configured. It is also 
+         required to select the port to be used to add / drop time slots. To do 
+         that the 't1AddDropSource' OID has to be configured in the agent to 
+         either 'datacom' or 'g703e0'."
+    ::= { t1PortControl 2 }
+
+t1AudioOutputSource OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          none (0),
+                          tone (1),
+                          portPrimary (2),
+                          portSecondary (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Some agents have the capability to add / drop time slots from / to an
+         analogue port. The agent is able to encode the audio signal from the
+         microphone and add it to the 1544 kb/s frame or to drop a selected time
+         slot to a speaker connected to the audio port. In this case, it may
+         be necessary to configure the origin of the signal to be sent to the
+         speaker. The possible configurations are:
+
+         - 'none': The audio output is disconnected. No signal is sent to the
+           analogue output.
+
+         - 'tone': The signal from the internal tone generator is sent to the
+           analogue output.
+
+         - 'portPrimary': The signal from a selected time slot in the primary
+           TDM test port is sent to the analogue output. If the agent has only
+           one TDM port supporting 1544 kb/s framed signals this is the only
+           external data source available.
+
+         - 'portSecondary': The signal from a selected time slot in the
+           secondary TDM test port is sent to the analogue output. This
+           configuration applies only to agents with two TDM test ports."
+    ::= { t1PortControl 3 }
+
+--
+--  T1 line configuration table
+--
+
+t1PortLineTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF T1PortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 't1PortLineTable' table configures some of the basic physical
+         operation parameters for T1 transmission and reception. Some of these
+         include the connector, line code, bit rate and the clock source."
+    ::= { t1Port 3 }
+
+t1PortLineEntry OBJECT-TYPE
+    SYNTAX            T1PortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { t1PortLineIndex }
+    ::= { t1PortLineTable 1 }
+
+T1PortLineEntry ::= SEQUENCE {
+    t1PortLineIndex               TableIndex,
+    t1PortLineBlockName           DisplayString,
+    t1PortLineConnector           ConnectorType,
+    t1PortLineConnectionMode      INTEGER,
+    t1PortLineTxCode              INTEGER,
+    t1PortLineRxCode              INTEGER,
+    t1PortLineTxClock             INTEGER,
+    t1PortLineFrequencyDeviation  Real32,        
+    t1PortLineStatus              RowStatus
+}
+
+t1PortLineIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { t1PortLineEntry 1 }
+
+t1PortLineBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { t1PortLineEntry 2 }
+
+t1PortLineConnector OBJECT-TYPE
+    SYNTAX            ConnectorType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Selects the connector for a test port from the available options
+         defined by the 'ConnectorType' textual convention. Depending on the
+         particular interfaces supported by the test port, only a subset of
+         the connectors may be available. Some interfaces may not require
+         the configuration of a physical connector. In this case, this field
+         could be configured as 'unspecified'."
+    ::= { t1PortLineEntry 3 }
+
+t1PortLineConnectionMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          endpoint (0),
+                          monitor20db (1),
+                          monitor25db (2),
+                          monitor30db (3),
+                          highz (4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "It configures test port input / output impedance in those interfaces
+         supporting this feature. The available configurations for this OID
+         are listed below:
+
+         - 'endpoint': This connection represents a network termination point
+           with the nominal impedance (75 Ohm for the unbalanced port and 
+           120 Ohm for the balanced one). The expected attenuation is the
+           theoretical cable attenuation which increases with the frequency
+           square root.
+
+         - 'monitor20db': 20 dB protected monitoring point. This is a connection
+           point that is isolated from the network and it is specially suited
+           for monitoring purposes. A flat attenuation of 20 dB is expected for
+           these points.
+
+         - 'monitor25db': 25 dB protected monitoring point. This is a connection
+           point that is isolated from the network and it is specially suited
+           for monitoring purposes. A flat attenuation of 25 dB is expected for
+           these points.
+
+         - 'monitor30db': 30 dB protected monitoring point. This is a connection
+           point that is isolated form the network and it is specially suited
+           for monitoring purposes. A flat attenuation of 30 dB is expected for
+           these points.
+
+         - 'highz': The port is configured with a very large input impedance.
+           This Connection mode is suited for such applications where the tester
+           has to monitor a link without disturbing the network operation and a
+           protected monitoring point is not available."
+    ::= { t1PortLineEntry 4 }
+
+t1PortLineTxCode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          b8zs (0),
+                          ami (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Transmitted line code. The line code provides correct levels, pulse
+         shapes and bit encoding rules for baseband transmission over an
+         electrical interface. The possible configurations for this OID are:
+
+         - 'b8zs': Bipolar with eight-zero substitution line code. Line code 
+           that alternates polarity when a binary '1' is to be transmitted and
+           replaces series of eight bits that are equal to '0' by reserved words
+           that violate the alternating polarity rule but they keep the DC
+           balanced. The replacement rule helps preserving the timing
+           information.
+
+         - 'ami': Alternate mark inversion. Line code that alternates polarity
+           when a binary '1' is to be transmitted. It does not have a zero
+           replacement rule. That means that this code has difficulties
+           preserving timing information when long zero sequences are
+           transmitted."
+    ::= { t1PortLineEntry 8 }
+
+t1PortLineRxCode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          bz8s (0),
+                          ami (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Received line code. The line code provides correct levels, pulse shapes
+         and bit encoding rules for baseband reception over an electrical
+         interface. The possible configurations for this OID are:
+
+         - 'b8zs': Bipolar with eight-zero substitution line code. Line code 
+           that alternates polarity when a binary '1' is to be transmitted and
+           replaces series of eight bits that are equal to '0' by reserved words
+           that violate the alternating polarity rule but they keep the DC
+           balanced. The replacement rule helps preserving the timing
+           information.
+
+         - 'ami': Alternate mark inversion. Line code that alternates polarity
+           when a binary '1' is to be transmitted. It does not have a zero
+           replacement rule. That means that this code has difficulties
+           preserving timing information when long zero sequences are
+           transmitted."
+    ::= { t1PortLineEntry 9 }
+
+t1PortLineTxClock OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          synthesized (0),
+                          recovered (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Clock source for the transmitter. These are the options available for
+         this setting:
+
+         - 'synthesized': It is used the clock signal internally generated by
+           the agent. The synthesized clock may be synchronized to an external
+           source such as a GPS clock in some agents. This setting can be used
+           to check potential synchronization impairments in the network.
+
+         - 'recovered': The clock signal recovered from the receiver is used by
+           the transmitter of the same port. This setting is used to synchronize
+           the agent with the DUT / SUT. Timing differences between the agent
+           and the DUT / SUT are therefore compensated."
+    ::= { t1PortLineEntry 10 }
+
+t1PortLineFrequencyDeviation OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        " Frequency offset applied to the transmitter clock. This feature is
+          useful to stress the DUT / SUT."
+    ::= { t1PortLineEntry 11 }
+
+t1PortLineStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 't1PortLineTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the encoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { t1PortLineEntry 12 }
+
+--
+--  T1 Frame configuration table
+--
+
+t1PortFrameTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF T1PortFrameEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "T1 agents with traffic generation capabilities may generate different
+         kinds of 1544 kb/s framed and unframed signals. This table provides the
+         resources required to configure frame structure and content.
+
+         T1 Communication consist on continuous transmission of frames
+         consisting on 24 time slots of 8 bits each. There is an additional
+         framing bit that is inserted in every frame. The T1 frame is therefore
+         made up of 24 x 8 + 1 bits. The same structure is repeated with a 
+         period of 125 microseconds which gives a transmission rate of 1544 
+         kb/s.
+         
+         T1 frames (ESF frame) may optionally include a CRC-6 code to report 
+         the occurrence of one or more bit errors in a specific group of data 
+         or a facilities data link which provides a operations, management and 
+         maintenance channel.
+
+         Call signalling in T1 systems may be based in different mechanisms. One
+         of them is the Channel Associated Signalling (CAS). In CAS signalling,
+         a signalling channel is associated with each information channel (there
+         is no common signalling channel), meaning that the signalling circuits
+         are personalized for each time slot. In T1 systems, the CAS signalling 
+         is implemented through the 'robbed bit' mechanism"
+    ::= { t1Port 4 }
+
+t1PortFrameEntry OBJECT-TYPE
+    SYNTAX            T1PortFrameEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { t1PortFrameIndex }
+    ::= { t1PortFrameTable 1 }
+
+T1PortFrameEntry ::= SEQUENCE {
+    t1PortFrameIndex              TableIndex,
+    t1PortFrameBlockName          DisplayString,
+    t1PortFrameTxStructure        FrameType,
+    t1PortFrameRxStructure        FrameType,
+    t1PortFrameTxTimeSlotRate     INTEGER,
+    t1PortFrameRxTimeSlotRate     INTEGER,
+    t1PortFrameTxRobbedBits       TruthValue,
+    t1PortRobbedBits              ABCD,
+    t1PortFrameRxRobbedBits       TruthValue,
+    t1PortFrameFdl                Word16,                
+    t1PortFrameStatus             RowStatus
+}
+
+t1PortFrameIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { t1PortFrameEntry 1 }
+
+t1PortFrameBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { t1PortFrameEntry 2 }
+
+t1PortFrameTxStructure OBJECT-TYPE
+    SYNTAX            FrameType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the T1 frame structure for the test port transmitter. The allowed
+         framing structures are SF (24 time slots without multiframe structure) 
+         and ESF (24 time slots with CRC-6 multiframe). Unframed operation is 
+         also supported."
+    REFERENCE
+        "- ANSI T1.403: 'Networ and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 3 }
+
+t1PortFrameRxStructure OBJECT-TYPE
+    SYNTAX            FrameType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the T1 frame structure for the test port receiver. The allowed
+         framing structures are SF (24 time slots without multiframe structure) 
+         and ESF (24 time slots with CRC-6 multiframe). Unframed operation is 
+         also supported."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 4 }
+
+t1PortFrameTxTimeSlotRate OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          kbps64 (0),
+                          kbps56 (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "T1 time slots are allowed to operate at two different bit rates. The 
+         64 kb/s rate devotes eight bits per frame per circut but the 56 kb/s 
+         rate only seven.
+         
+         Some T1 implementations use one bit in each time slot to transfer 
+         signalling information. This way to share the 'robbed bit' between 
+         user data transmission and signalling may interfere with some 
+         applications. Specifically, 64 kb/s data channels are not compatible 
+         with the robbed bit mechanism. The solution is to use one bit only
+         for signalling and seven bits (56 kb/s) only for user data 
+         transmission.
+         
+         This OID selects the time slot rate of the transmitter."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 5 }
+
+t1PortFrameRxTimeSlotRate OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          kbps64 (0),
+                          kbps56 (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "T1 time slots are allowed to operate at two different bit rates. The 
+         64 kb/s rate devotes eight bits per frame per circut but the 56 kb/s 
+         rate only seven.
+         
+         Some T1 implementations use one bit in each time slot to transfer 
+         signalling information. This way to share the 'robbed bit' between 
+         user data transmission and signalling may interfere with some 
+         applications. Specifically, 64 kb/s data channels are not compatible 
+         with the robbed bit mechanism. The solution is to use one bit only
+         for signalling and seven bits (56 kb/s) only for user data 
+         transmission.
+         
+         This OID selects the time slot rate of the receiver."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 6 }
+
+t1PortFrameTxRobbedBits OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the robbed bit mechanism in the port transmitter. 
+         This function enables the agent to use the least significant bit in 
+         each T1 time slot to transfer signalling information in certain 
+         frames."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 7 }
+
+t1PortRobbedBits OBJECT-TYPE
+    SYNTAX            ABCD
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the transmitted robbed bit values in a T1 port. There are
+         four robbed bits per circuit: A, B, C and D. It is assumed that the
+         ABCD word is the same in all circuits."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 8 }
+
+t1PortFrameRxRobbedBits OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the robbed bit mechanism in the port receiver. 
+         This function enables the agent to use the least significant bit in 
+         each T1 time slot to transfer signalling information in certain 
+         frames."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Elecrical Interface'."
+    ::= { t1PortFrameEntry 9 }
+
+t1PortFrameFdl OBJECT-TYPE
+    SYNTAX            Word16
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the Facilities Data Link (FDL) in ESF T1 frames. This is a
+         4 kb/s circuit used to transmit operations, administration and 
+	 management information including alarms or loopback management."
+    REFERENCE
+        "- ANSI T1.403: 'Network and Customer Installation interface: DS1 
+           Electrical Interface'."
+    ::= { t1PortFrameEntry 10 }
+
+
+t1PortFrameStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 't1PortFrameTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { t1PortFrameEntry 11 }
+
+--
+--  T1 Multiplexer configuration table
+--
+
+t1PortMuxTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF T1PortMuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 't1PortMuxTable' includes 24 rows, one for each time slot present 
+         in the T1 frame. For each time slot the table specifies a particular 
+         data source, including internally or externally generated data.
+
+         There is one 't1PortMuxTable' for each test port. Tables are      
+         distinguished through the value of 't1PortMuxIndexBlock'. This index is
+         also used to tie the 't1PortMuxTable' to an specific row of the
+         't1PortFrameTable'."
+    ::= { t1Port 5 }
+
+t1PortMuxEntry OBJECT-TYPE
+    SYNTAX            T1PortMuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { t1PortMuxIndexBlock, t1PortMuxIndexTimeSlot }
+    ::= { t1PortMuxTable 1 }
+
+T1PortMuxEntry ::= SEQUENCE {
+    t1PortMuxIndexBlock           TableIndex,
+    t1PortMuxIndexTimeSlot        TableIndex,
+    t1PortMuxBlockName            DisplayString,
+    t1PortMux                     TimeSlotUse,
+    t1PortMuxStatus               RowStatus
+}
+
+t1PortMuxIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { t1PortMuxEntry 1 }
+
+t1PortMuxIndexTimeSlot OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each timeslot of the
+         generated frames.  Values are assigned contiguously
+         starting from 1. The value for each block index remains constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { t1PortMuxEntry 2 }
+
+t1PortMuxBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { t1PortMuxEntry 3 }
+
+t1PortMux OBJECT-TYPE
+    SYNTAX            TimeSlotUse
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a data source for the current time slot. This data source
+         could be internal (test pattern generator, tone generator) or external
+         (data communications port, G.703 co-directional port, analogue port or
+         a time slot received in the current test port)."
+    ::= { t1PortMuxEntry 4 }
+
+t1PortMuxStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 't1PortMuxTable'. Enables dynamic creation / deletion
+         of table entries in the current table. Information contained in the
+         table entry may not be available for read / write operations if the
+         status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { t1PortMuxEntry 5 }
+
+--
+--  T1 Demultiplexer configuration table
+--
+
+t1PortDemuxTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF T1PortDemuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The 't1PortDemuxTable' includes 24 rows, one for each time slot present
+         in the T1 frame. For each time slot the table specifies a particular
+         data sink, including internal analysis blocks or external destinations.
+
+         There is one 't1PortMuxTable' for each test port. Tables are      
+         distinguished through the value of 't1PortMuxIndexBlock'. This index is
+         also used to tie the 't1PortMuxTable' to an specific row of the
+         't1PortFrameTable'."
+    ::= { t1Port 6 }
+
+t1PortDemuxEntry OBJECT-TYPE
+    SYNTAX            T1PortDemuxEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { t1PortDemuxIndexBlock, t1PortDemuxIndexTimeSlot }
+    ::= { t1PortDemuxTable 1 }
+
+T1PortDemuxEntry ::= SEQUENCE {
+    t1PortDemuxIndexBlock         TableIndex,
+    t1PortDemuxIndexTimeSlot      TableIndex,
+    t1PortDemuxBlockName          DisplayString,
+    t1PortDemux                   TimeSlotUse,
+    t1PortDemuxStatus             RowStatus
+}
+
+t1PortDemuxIndexBlock OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each frame monitoring 
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { t1PortDemuxEntry 1 }
+
+t1PortDemuxIndexTimeSlot OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each timeslot of the
+         monitored frames.  Values are assigned contiguously  starting from 1.
+         The value for each block index remains constant at least from one
+         re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { t1PortDemuxEntry 2 }
+
+t1PortDemuxBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { t1PortDemuxEntry 3 }
+
+t1PortDemux OBJECT-TYPE
+    SYNTAX            TimeSlotUse
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures a destination for the current time slot. This destination
+         could be internal (test pattern analyser, tone generator) or external
+         (data communications port, G.703 co-directional port or analogue
+         port)."
+    ::= { t1PortDemuxEntry 4 }
+
+t1PortDemuxStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 't1PortDemuxTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { t1PortDemuxEntry 5 }
+
+END

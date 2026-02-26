@@ -1,0 +1,79 @@
+ATSL-REGISTRATION-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL registration objects used to identify the type of product being
+-- managed.
+--
+
+IMPORTS
+    MODULE-IDENTITY, enterprises                              FROM SNMPv2-SMI
+    atslGeneral                                               FROM ATSL-MIB;
+
+atslReg MODULE-IDENTITY
+    LAST-UPDATED "202404020000Z" -- 2 April, 2024
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+
+    DESCRIPTION
+        "Registration MIB of ALBEDO Telecom"
+	REVISION     "202404020000Z" -- 2 April, 2024
+    DESCRIPTION
+        "Added Net.Time clock"
+	REVISION     "201710250000Z" -- 25 October, 2017
+    DESCRIPTION
+        "Added xGenius tester (reused duplicated entry)."
+	REVISION     "201502260000Z" -- 26 February, 2015
+    DESCRIPTION
+        "Added Ether10.Genius, Ether.DuaLoop and Ether10.DuaLoop testers."
+	REVISION     "201405200000Z" -- 20 May 2014
+    DESCRIPTION
+        "Draft 1 public."
+
+    ::= { atslGeneral 1 }
+
+
+-- Product families
+atslPDHReg                    OBJECT IDENTIFIER ::= { atslReg 1 }
+atslEthernetReg               OBJECT IDENTIFIER ::= { atslReg 2 }
+atslNetworkReg                OBJECT IDENTIFIER ::= { atslReg 3 }
+atslCableReg                  OBJECT IDENTIFIER ::= { atslReg 4 }
+atslClockReg                  OBJECT IDENTIFIER ::= { atslReg 5 }
+
+-- PDH products
+atslAT2048Reg                 OBJECT IDENTIFIER ::= { atslPDHReg 1 }
+atslATOneReg                  OBJECT IDENTIFIER ::= { atslPDHReg 2 }
+
+-- Ethernet tester products
+atslEtherGigaReg              OBJECT IDENTIFIER ::= { atslEthernetReg 1 }
+atslEtherGeniusReg            OBJECT IDENTIFIER ::= { atslEthernetReg 2 }
+atslEtherSyncReg              OBJECT IDENTIFIER ::= { atslEthernetReg 3 }
+atslEtherLoopReg              OBJECT IDENTIFIER ::= { atslEthernetReg 4 }
+atslEtherxGeniusReg           OBJECT IDENTIFIER ::= { atslEthernetReg 5 }
+atslEtherDuaLoopReg           OBJECT IDENTIFIER ::= { atslEthernetReg 6 }
+atslEther10DuaLoopReg         OBJECT IDENTIFIER ::= { atslEthernetReg 7 }
+atslEther10GeniusReg          OBJECT IDENTIFIER ::= { atslEthernetReg 8 }
+atslZeusReg                   OBJECT IDENTIFIER ::= { atslEthernetReg 9 }
+
+-- Network tester products
+atslNetSharkReg               OBJECT IDENTIFIER ::= { atslNetworkReg 1 }
+atslNetHunterReg              OBJECT IDENTIFIER ::= { atslNetworkReg 2 }
+atslNetStormReg               OBJECT IDENTIFIER ::= { atslNetworkReg 3 }
+atslNetSyncReg                OBJECT IDENTIFIER ::= { atslNetworkReg 4 }
+
+-- Cable testing products
+atslMetroCableReg             OBJECT IDENTIFIER ::= { atslCableReg 1 }
+atslMetroOTDRReg              OBJECT IDENTIFIER ::= { atslCableReg 2 }
+
+-- Reference clock products
+atslNetTimeReg                OBJECT IDENTIFIER ::= { atslClockReg 1 }
+
+END

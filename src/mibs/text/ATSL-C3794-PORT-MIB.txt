@@ -1,0 +1,365 @@
+ATSL-C3794-PORT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for IEEE C37.94 test port configuration.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32              FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus                 FROM SNMPv2-TC
+    atslGeneral, TableIndex,Real32                       FROM ATSL-MIB
+    FrameType                                            FROM ATSL-TDM-PORT-MIB;
+
+ c3794Port MODULE-IDENTITY
+    LAST-UPDATED "201707170000Z" -- 17 July, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB defines configuration fields and tables required for
+         configuration of IEEE C37.94 ports in Albedo Telecom SNMP agents.
+
+         The IEEE C37.94 standard constitutes a communications interface for 
+         interconnection of power protection equipment (protection relays) and 
+         transmission equipment using two MMFs. This communications standard 
+         enables transmission of N x 64 kb/s (with N ranging between 1 and 12) 
+         to distances up to 2 km.
+
+         The bit rate corresponding to N=1 is 64 kb/s. The bit rate 
+         corresponding to N=12 is 768 kb/s. Optical transmission is used to 
+         guarantee reliable transmission within the substation environment
+         where the IEEE C37.94 is designed to operate. This environment is 
+         characterized by a high level of electromagnetic perturbations caused 
+         by high voltages and currents in power lines. Specially during fault
+         conditions the perturbation level can rise significantly and disturb 
+         communications channels based on copper wires. 
+
+                                 ------------------
+                                 |Header (16 bits)|
+                                 |abcdefgh00001111|
+                                 ------------------
+                                 |    Overhead    |
+                                 |    (48 bits)   |
+                                 |                |
+                                 |  pp qq rr ss   |
+                                 |  10 10 10 ..   |
+                                 |                |
+                                 ------------------
+                                 |  Channel Data  |
+                                 |   (192 bits)   |
+                                 |                |
+                                 |                |
+                                 |                |
+                                 |                |
+                                 |       ...      |
+                                 |                |
+                                 |                |
+                                 ------------------
+
+         The IEEE C37.94 frame closely resembles the structure of an ITU-T
+         G.703 2048 kb/s signal but it defines a framing structure prepared for
+         conveying a single variable rate channel rather than various 64 kb/s
+         multiplexed channels.
+
+         Scalars
+
+         - 'c3794PortEnable': Starts / Stops traffic generation in the managed 
+           entity. The action starts generation through all the available 
+           blocks. The number of monitoring blocks may not be the same for 
+           different managed entities and it may be that there is only one 
+           monitoring block for some of them.
+
+         Tables
+
+         - 'c3794PortLineTable': Configures settings related with the IEEE 
+           C37.94 transmission media and optical layer communications. 
+           Basically, this table enables or disables the optical transmitter 
+           for safery reasons and it controls the transmitted clock source.
+
+         - 'c3794PortFrameTable': Sets the IEEE C37.94 frame. It enables the 
+           user to choose between unframed transmission or to enable the frame 
+           structure defined in the IEEE C37.94 standards. It also configures 
+           the bit rate in the payload area in transmitted frames. This payload 
+           is an integer multiple of 64 kb/s ranging between 64 kb/s and
+           768 kb/s.
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+        - Ether10.Genius 10GbE / E1/T1 / Datacom / C37.94 Tester"
+
+    REVISION     "201707170000Z" -- 17 July, 2017
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 29 }
+
+--
+-- Top level module structure
+--
+
+c3794PortControl      OBJECT IDENTIFIER ::= { c3794Port 1 }
+
+--
+-- Transmission enable / disable control group
+--
+
+c3794PortEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops traffic generation in the managed entity. The action 
+         starts generation through all the available blocks. The number of
+         monitoring blocks may not be the same for different managed entities
+         and it may be that there is only one monitoring block for some of 
+         them."
+    ::= { c3794PortControl 1 }
+
+--
+--  C37.94 line configuration table
+--
+
+c3794PortLineTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF C3794PortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures settings related with the IEEE C37.94 transmission media and 
+         optical layer communications. Basically, this table enables or disables 
+         the optical transmitter for safery reasons and it controls the 
+         transmitted clock source."
+    ::= { c3794Port 2 }
+
+c3794PortLineEntry OBJECT-TYPE
+    SYNTAX            C3794PortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { c3794PortLineIndex }
+    ::= { c3794PortLineTable 1 }
+
+C3794PortLineEntry ::= SEQUENCE {
+    c3794PortLineIndex                 TableIndex,
+    c3794PortLineBlockName             DisplayString,
+    c3794PortLineEnable                TruthValue,
+    c3794PortLineLaserOn               TruthValue,
+    c3794PortLineTxClock               Integer32,
+    c3794PortLineFrequencyDeviation    Real32,
+    c3794PortLineStatus                RowStatus
+}
+
+c3794PortLineIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { c3794PortLineEntry 1 }
+
+c3794PortLineBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { c3794PortLineEntry 2 }
+
+c3794PortLineEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the port in the current IEEE C37.94 interface. 
+         Both the transmitter and the received are disabled when the equipment 
+         is configured in endpoint mode. In monitor mode the transmitter is 
+         never enabled and therefore this command is effective only in the 
+         receiver.
+
+         This command works in the same way in agents with built in IEEE C37.94 
+         generation and analysis and in units depending on an external module"
+    ::= { c3794PortLineEntry 3 }
+
+c3794PortLineLaserOn OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "IEEE C37.94 ports support independent on / off switch for the optical
+         transmitter. This function is provided to increase the safety of the
+         optical source. It is recommended to switch the optical source on only
+         when testing."
+    ::= { c3794PortLineEntry 4 }
+
+c3794PortLineTxClock OBJECT-TYPE
+    SYNTAX            Integer {
+                          synthesized (0),
+                          recovered (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Clock source for the transmitter. These are the options available for
+         this setting:
+
+         - 'synthesized': It is used the clock signal internally generated by
+           the agent. The synthesized clock may be synchronized to an external
+           source such as a GPS clock in some agents. This setting can be used
+           to check potential synchronization impairments in the network.
+
+         - 'recovered': The clock signal recovered from the receiver is used by
+           the transmitter of the same port. This setting is used to synchronize
+           the agent with the DUT / SUT. Timing differences between the agent
+           and the DUT / SUT are therefore compensated."
+    ::= { c3794PortLineEntry 5 }
+
+c3794PortLineFrequencyDeviation OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        " Frequency offset applied to the transmitter clock. This feature is
+          useful to stress the DUT / SUT."
+    ::= { c3794PortLineEntry 6 }
+
+c3794PortLineStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'c3794PortLineTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the encoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { c3794PortLineEntry 7 }
+
+--
+--  C37.94 Frame configuration table
+--
+
+c3794PortFrameTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF C3794PortFrameEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Sets the IEEE C37.94 frame. It enables the user to choose between
+         unframed transmission or to enable the frame structure defined in the 
+         IEEE C37.94 standards. It also configures the bit rate in the payload 
+         area in transmitted frames. This payload is an integer multiple of 64 
+         kb/s ranging between 64 kb/s and 768 kb/s."
+    ::= { c3794Port 3 }
+
+c3794PortFrameEntry OBJECT-TYPE
+    SYNTAX            C3794PortFrameEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { c3794PortFrameIndex }
+    ::= { c3794PortFrameTable 1 }
+
+C3794PortFrameEntry ::= SEQUENCE {
+    c3794PortFrameIndex                TableIndex,
+    c3794PortFrameBlockName            DisplayString,
+    c3794PortFrameStructure            FrameType,
+    c3794PortFrameTxTimeSlots          Integer32,
+    c3794PortFrameStatus               RowStatus
+}
+
+c3794PortFrameIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { c3794PortFrameEntry 1 }
+
+c3794PortFrameBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { c3794PortFrameEntry 2 }
+
+c3794PortFrameStructure OBJECT-TYPE
+    SYNTAX            FrameType
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the frame type to be used in the IEEE C37.94 port. Users 
+         may decide to use an unframed pattern for testing or an structured 
+        IEEE C37.94 frame. The available options are then:"
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794PortFrameEntry 3 }
+
+c3794PortFrameTxTimeSlots OBJECT-TYPE
+    SYNTAX            Integer32 (1..12)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the transmitted payload capacity in interfaces configured 
+         to generate IEEE C37.94 frames. The payload size is a number between 1 
+         and 12 and it represents a number N such that the capacity, expresed 
+         in kb/s, is N x 64 kb/s. For example, if this OID is configured to 1 
+         then the payload size is 64 kb/s and if it is configured the maximum 
+         value of 12, then the payload capacity becomes 768 kb/s."
+    REFERENCE
+        "- IEEE C37.94: IEEE Standard for N Times 64 Kilobit Per Second Optical
+           Fiber Interfaces Between Teleprotection and Multiplexer Equipment."
+    ::= { c3794PortFrameEntry 4 }
+
+c3794PortFrameStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 't1PortFrameTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the ancoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { c3794PortFrameEntry 5 }
+END

@@ -1,0 +1,478 @@
+ATSL-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB: General ALBEDO OID structure and textual conventions.
+--
+
+IMPORTS
+    MODULE-IDENTITY, enterprises, Unsigned32, Integer32,
+    Gauge32, Opaque                                           FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION                                        FROM SNMPv2-TC;
+
+atsl MODULE-IDENTITY
+    LAST-UPDATED "201710230000Z" -- 23 October, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module contains objects describing the top level
+         structure of the OID tree administered by ALBEDO Telecom"
+    REVISION     "201710230000Z" -- 23 October, 2017
+    DESCRIPTION
+        "- Adds the textual conventions for Int64, UInt64, Float32 and
+        Float64 opaque data types."
+    REVISION     "201406170000Z" -- 17 June, 2014
+    DESCRIPTION
+        "- Adds the following test conventions: 'MplsLabel', 'TestPattern' and
+           'Encapsulation."
+    REVISION     "201309130000Z" -- 13 September, 2013
+    DESCRIPTION
+        "- The following text conventions have been added: 'Real32', 'Integer8'
+           and 'Unsigned8'."
+    REVISION     "201302010000Z" -- 01 February, 2013
+    DESCRIPTION
+        "- The following text conventions have been added: 'TableIndex',
+           'Word16', 'VlanIdentifier', 'PriorityCodePoint',
+           'DiffServCodePoint', 'TimeIntervalMicroS', 'RatioPercentage'."
+    REVISION     "201301240000Z" -- 24 January, 2013
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+    ::= { enterprises 39412 }
+
+--
+-- General ALBEDO Telecom MIB repository
+--
+
+atslGeneral                 OBJECT IDENTIFIER ::= { atsl 1 }
+
+--
+-- Special ALBEDO Telecom MIB repository
+--
+
+atslSpecial                 OBJECT IDENTIFIER ::= { atsl 2 }
+
+--
+-- Experimental ALBEDO Telecom MIB repository
+--
+
+atslExperimental            OBJECT IDENTIFIER ::= { atsl 3 }
+
+--
+-- Product-specific ALBEDO Telecom MIB repository
+--
+
+atslProduct                 OBJECT IDENTIFIER ::= { atsl 4 }
+
+--
+-- Internal tests ALBEDO Telecom MIB repository
+--
+
+atslTesting                 OBJECT IDENTIFIER ::= { atsl 99 }
+
+--
+-- Textual conventions
+--
+
+TableIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each SNMP table entry. It is
+         recommended that values are assigned contiguously starting from 1. The
+         value for each block index must remain constant at least from one     
+         re-initialization of the entity's network management to the next       
+         re-initialization."
+    SYNTAX            Unsigned32 (1..2147483647)
+
+Word16 ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "x"
+    STATUS            current
+    DESCRIPTION
+        "Hexadecimal 16-bit value. This textual convention can be used whenever
+         hexadecimal representation is preferable to the more usual decimal
+         number representation."
+    SYNTAX            Unsigned32 (0..65535)
+
+Word32 ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "x"
+    STATUS            current
+    DESCRIPTION
+        "Hexadecimal 32-bit value. This textual convention can be used whenever
+         hexadecimal representation is preferable to the more usual decimal
+         number representation."
+    SYNTAX            Unsigned32
+
+Real32 ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-3"
+    STATUS            current
+    DESCRIPTION
+         "Represents a real decimal number with three decimal digits. Both
+          positive and negative numbers are accepted (and zero, which is encoded
+          as 0.000)"
+    SYNTAX            Integer32
+
+Integer8 ::=TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+         "Textual convention that represents a signed 1-byte value. It can be
+          used to implement variables which have values between -128 and 127."
+    SYNTAX            Integer32 (-128..127)
+
+Unsigned8 ::=TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+         "Textual convention that represents an unsigned 1-byte value. It can
+          be used to implement variables which have values between 0 and 255."
+    SYNTAX            Unsigned32 (0..255)
+
+-- Textual convention defining a 32-bit floating-point scalar using the
+-- Float32Type data type.
+
+Float32 ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION       
+         "A 32-bit IEEE 754 floating-point number.
+          The value is restricted to the BER serialization of the following
+          ASN.1 data type:
+          
+          Float32Type ::= [APPLICATION 8] IMPLICIT OCTET STRING (SIZE (4))
+          
+          The BER serialization of the length for values of this data type
+          must use the definite length, short encoding form.
+                                
+          For example, the BER serialization of value '1.234' in IEEE 754
+          format is '3f9df3b6'h, then the data type Float32Type is
+          '9f78043f9df3b6'h.  (The tag is '9f78'h; the length is '04'h; and
+          the value is '3f9df3b6'h.)
+          The BER serialization of value '9f78043f9df3b6'h of data type
+          Opaque is '44079f78043f9df3b6'h."
+          
+    SYNTAX            Opaque (SIZE(7))
+                                                                                   
+-- Textual convention defining a 64-bit double-precision scalar using the
+-- Float64Type data type.
+
+Float64 ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION       
+         "A 64-bit IEEE 754 double-precision number.
+          The value is restricted to the BER serialization of the following
+          ASN.1 data type:
+          
+          Float64Type ::= [APPLICATION 9] IMPLICIT OCTET STRING (SIZE (8))
+          
+          The BER serialization of the length for values of this data type
+          must use the definite length, short encoding form.
+                                
+          For example, the BER serialization of value '1.234' in IEEE 754
+          double-precision format is 'c8b43958'h, then the data type
+          Float32Type is '9f790800000000c8b43958'h.  (The tag is '9f79'h;
+          the length is '08'h; and the value is '00000000c8b43958'h.)
+          The BER serialization of value '9f790800000000c8b43958'h of data
+          type Opaque is '440b9f790800000000c8b43958'h."
+          
+    SYNTAX            Opaque (SIZE(11))
+                                                                                   
+-- Textual convention defining a signed 64-bit integer using the 
+-- Int64Type data type.
+
+Int64 ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION       
+         "A 64-bit signed integer.
+          The value is restricted to the BER serialization of the following
+          ASN.1 data type:
+          
+          Int64Type ::= [APPLICATION 10] IMPLICIT INTEGER
+          
+          The BER serialization of the length for values of this data type
+          must use the definite length, short encoding form.
+                                
+          For example, the BER serialization of value '12345678'h of data
+          type Int64TYPE is '9f7a0412345678'h.  (The tag is '9f7a'h; the
+          length is '04'h; and the value is '12345678'h.) 
+          The BER serialization of value '9f7a0412345678'h of data type
+          Opaque is '44079f7a0412345678'h."
+          
+    SYNTAX            Opaque (SIZE(4..12))
+
+-- Textual convention defining an unsigned 64-bit integer using the
+-- UInt64Type data type.
+
+UInt64 ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION       
+         "A 64-bit unsigned integer.
+          The value is restricted to the BER serialization of the following
+          ASN.1 data type:
+          
+          Int64Type ::= [APPLICATION 11] IMPLICIT INTEGER
+          
+          The BER serialization of the length for values of this data type
+          must use the definite length, short encoding form.
+                                
+          For example, the BER serialization of value '12345678'h of data
+          type UInt64TYPE is '9f7b0412345678'h.  (The tag is '9f7b'h; the
+          length is '04'h; and the value is '12345678'h.)
+          The BER serialization of value '9f7b0412345678'h of data type
+          Opaque is '44079f7b0412345678'h."
+          
+    SYNTAX            Opaque (SIZE(4..12))
+                                                                                   
+Encapsulation ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Defines an encapsulation for a frame. Currently only Ethernet
+         encapsulations are defined in this textual convention. The accepted
+         values are listed below:
+
+         - 'none': No specific encapsulation defined for the frame. In Ethernet
+           networks, the upper layers are transmitted through a plain DIX or
+           IEEE 802.3 frame.
+
+         - 'vlan': Transmitted frames are labelled with an IEEE 802.1Q frame
+           tag. Settings related with configuration of the VLAN tag are enabled
+           when this option is selected.
+
+         - 'qinq': Transmitted frames carry two VLAN tags, one service provider
+           tag (S-VLAN) and a customer tag (C-VLAN). The C-VLAN is identified
+           by the normal IEEE 802.1Q Ethertype and the S-VLAN carries one of
+           a not-standard Ethertype.
+
+         - 'ieee8021ad': Transmitted frames carry two VLAN tags. It is similar
+            to the 'qinq' encapsulation but this option follows strictly the
+            standard IEEE 802.1ad encapsulation for Provider Bridges (PB).
+            Specifically, the IEEE 802.1ad carries the special 0x88a8 Ethertype
+            within the S-VLAN.
+
+         - 'external': Allows the agent to configure an encapsulation defined
+           by the application. This external encapsulation may of the same
+           type defined by the textual convention or it may be a different one."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    SYNTAX            INTEGER {
+                          none (0),
+                          vlan (1),
+                          qinq (2),
+                          ieee8021ad (3),
+                          external (4)
+                      }
+
+VlanIdentifier ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "Encodes an VLAN Identifier (VID) as defined by the REFERENCEd
+         documentation. VIDs are 10-bit numbers than identify uniquely an VLAN
+         instance in a trunk links."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks."
+    SYNTAX            Unsigned32 (0..4095)
+
+PriorityCodePoint ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "Encodes a priority codepoint (PCP) as defined by the REFERENCEd
+         documentation. PCPs are 3-bit identifier than encodes up to eight
+         different traffic classes which may potentially receive differentiated
+         treatment within the bridged network."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks."
+    SYNTAX            Unsigned32 (0..7)
+
+DiffServCodePoint ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "Encodes a differentiated services codepoint (DSCP) as defined by the
+         REFERENCEd documentation. DSCPs are 6-bit identifiers than encodes up
+         to 64 different traffic classes which may potentially receive
+         differentiated treatment within the routed network."
+    REFERENCE 
+        "- IETF RFC 2474 'Definition of the Differentiated Services Field (DS
+           Field) in the IPv4 and IPv6 Headers'."
+    SYNTAX            Unsigned32 (0..63)
+
+MplsLabel ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "Describes a 20-bit MPLS label. Labels are used in MPLS networks for
+         traffic switching. The 20-bit label is part of a 32-bit MPLS header
+         which is normally inserted between the layer 2 header and the IP
+         header."
+    REFERENCE 
+        "- IETF RFC 3031 'Multiprotocol Label Switching Architecture'.
+
+         - IETF RFC 3032 'MPLS Label Stack Encoding'."
+    SYNTAX            Unsigned32 (0..1048575)
+
+TimeIntervalMicroS ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-3"
+    STATUS            current
+    DESCRIPTION
+        "Represents a period of time expressed in milliseconds. The time
+         includes three decimal digits representing the fractional time.
+ 
+         The 'on the wire' representation of a 'TimeIntervalMicroS' time
+         is an integer number of microseconds. This is different to the
+         'on the screen' representation that is a fixed point fractionary
+         mumber with three decimal digits."
+    SYNTAX            Integer32
+
+RatioPercentage ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-4"
+    STATUS            current
+    DESCRIPTION
+        "Represents the encoded value of a ratio between two values
+         a / b, where a >= 0, b > 0 and b > a. The value is encoded as
+         an integer so that the least significant digit of the represen-
+         tation is equivalent to a percentage of 0.0001%. For example,
+         the 650250 code is equivalent to a percentage of 65.025%."
+    SYNTAX            Gauge32 (0..1000000)
+
+TestPattern ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Represents a bit pattern available for bit error ratio (BER) testing.
+         In BER tests, the geneator transmits a known pattern of custom length.
+         This pattern is later compared with the original one and differences
+         are recorded to account for transmission errors. Test patterns 
+         supported by this textual convention are listed below:
+
+         - 'prbs11' / 'prbs11i': This is a pseudo-random bit pattern (and its
+           inverted version) specified in ITU-T O.153 for error performance
+           measurements below the primary rate (2048 kb/s). The 'prbs11i' is a
+           2^11-1 bit wise inverted 'prbs11' pattern.
+
+         - 'prbs15' / 'prbs15i': This is a pseudo-random bit pattern (and its
+           inverted version) specified in ITU-T O.151 for measurements at the
+           primary rate or above. The 'prbs15i' is a 2^15-1 bit wise inverted
+           'prbs15' pattern.
+
+         - 'prbs20' / 'prbs20i': This is a pseudo-random bit pattern (and its
+           inverted version) specified in ITU-T O.151 for error performance
+           measurements at the primary bit rate or above. The 'prbs20i' is a
+           2^20-1 bit wise inverted 'prbs20' pattern.
+
+         - 'prbs23' / 'prbs23i': This is a pseudo-random bit pattern (and its
+           inverted version) specified in ITU-T O.151 for error performance
+           measurements at the primary bit rate or above. The ''prbs23i' is a
+           2^23-1 bit wise inverted 'prbs23' pattern.
+
+         - 'rpat': Random Data Pattern, this is a L1-PCS-synchronized test
+           pattern defined in the NCITS TR-25-1999. This pattern is designed
+           to provide energy across the entire frequency spectrum, and it
+           provides a good basic BER test. The RPAT consists on the continuous
+           repetition of the following sequence expressed in hexadecimal format:
+           0x3e-b0-5c-67-85-d3-17-2c-a8-56-d8-4b-b6-a6-65. The RPAT is
+           available for optical 1000 Mb/s Ethernet L1 BER tests only.
+
+         - 'jpat': Jitter Tolerance Pattern. This is a L1-PCS-synchronized test
+           pattern defined in the NCITS TR-25-1999. This test is designed for
+           receiver jitter tolerance testing. The JPAT consists on the cyclic
+           transmission of the following 8B/10B symbol sequence: D30.3
+           (repeated 192 times) and D21.5 (repeated 64 times).
+
+         - 'spat': Supply Noise test pattern: This is a L1-PCS-synchronized
+           test pattern defined in the NCITS TR-25-1999. It represents the
+           worst-case power supply noise introduced by a transceiver. The SPAT
+           consists on the cyclic transmission of the following hexadecimal
+           pattern: 0xac-d4-ca-cd-4c (512 times). The SPAT is available for
+           optical 1000 Mb/s Ethernet L1 BER tests only
+
+         - 'hfpat': High Frequency test pattern. This is a L1-PCS-synchronized
+           test pattern defined in Annex 36A of the IEEE 802.3 standard. The
+           purpose of the pattern is to test random jitter at a BER of 1.0e-12,
+           and also to test the asymmetry of transition times. The HFPAT
+           consists in the continuous repetition of the D21.5 code-group and
+           it corresponds with the following bit sequence: 101010101010101010...
+           The RPAT is available for optical L1 BER tests only.
+
+         - 'lfpat': This is a L1-PCS-synchronized test pattern defined in
+           Annex 36A of the IEEE 802.3 standard. The purpose of this pattern is
+           to test low-frequency random jitter and also to test PLL tracking
+           error. The LFPAT consists on the continuous repetition of the K28.7
+           code-group and it corresponds with the following bit sequence:
+           11111000001111100000... The RPAT is available for optical 1000 Mb/s
+           Ethernet L1 BER tests only.
+
+         - 'mfpat': Mixed Frequency test pattern. This is a L1-PCS-synchronized
+           test pattern defined in Annex 36A of the IEEE 802.3 standard. The
+           purpose of this pattern is to test the combination of random and
+           deterministic jitter. The MFPAT consists on the continuous repetition
+           of the K.28.5 code-group and it corresponds with the following bit
+           sequence: 111110101100000101001111101011... The RPAT is available for
+           optical 1000 Mb/s Ethernet L1 BER tests only.
+
+         - 'lcrpat': Long Continuous Random test pattern. This a L2-compliant
+           test pattern defined in Annex 36A of the IEEE 802.3 standard. This
+           pattern is designed to provide a broad spectral content and minimal
+           peaking, allowing for the measurement of jitter at either the
+           component or system level. The structure of the LCRPAT is based on
+           cyclic transmission of a valid preamble, SDF sequence, the modified
+           RPAT sequence repeated 126 times, a valid FCS and a 12-byte IFG. The
+           modified RPAT consists on the following sequence before the 8B/10B
+           encoding: 0xbe-d7-23-47-6b-8f-b3-14-5e-fb-35-59.
+
+         - 'scrpat': Sort Continuous Random test pattern. This is a L2-compliant
+           test pattern defined in Annex 36A of the IEEE 802.3 standard. This
+           pattern is designed to provide a broad spectral content and minimal
+           peaking, allowing for the measurement of jitter at either the
+           component or system level. The SCRPAT pattern structure is identical
+           to the LCRPAT but the modified RPAT is repeated only 29 times
+           resulting in shorter MAC frames.
+
+         - 'all0' / 'all1': Sets the transmitted pattern to all zeroes or all
+           ones.
+
+         - 'external': Sets an external pattern with properties normally
+           different to the ones supported by this textual convention. The 
+           'external' pattern can be used to configure a user defined bit
+           or byte sequence pattern for example."
+    REFERENCE 
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications.
+
+         - ITU-T O.151: Error performance measuring equipment operating at the
+           primary rate and above.
+
+         - ITU-T O.153: Basic parameters for the measurement of error
+           performance at bit rates below the primary rate."
+    SYNTAX            INTEGER {
+                          prbs11 (0),
+                          prbs11i (1),
+                          prbs15 (2),
+                          prbs15i (3),
+                          prbs20 (4),
+                          prbs20i (5),
+                          prbs23 (6),
+                          prbs23i (7),
+                          rpat (8),
+                          jpat (9),
+                          spat (10),
+                          hfpat (11),
+                          lfpat (12),
+                          mfpat (13),
+                          lcrpat (14),
+                          scrpat (15),
+                          all0 (16),
+                          all1 (17),
+                          user (18)
+                      }
+END

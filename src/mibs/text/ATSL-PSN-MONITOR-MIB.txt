@@ -1,0 +1,2088 @@
+ATSL-PSN-MONITOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Ethernet / IP monitoring.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32,Counter32,
+    Counter64                                             FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus                  FROM SNMPv2-TC
+    atslGeneral, TableIndex, RatioPercentage,
+    TimeIntervalMicroS                                    FROM ATSL-MIB;
+
+psnMonitor MODULE-IDENTITY
+    LAST-UPDATED "201309060000Z" -- 6 September, 2013
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module contains objects describing packet-switched network
+         statistics frequently used in test applications. It is assumed that the
+         protocol stack is based on Ethernet and IP. Specifically L1 and L2 is
+         assumed to be Ethernet / IEEE 802.3 and L3 is either IPv4 or IPv6.
+
+         Scalars
+
+         - 'psnMonEnable': Starts / Stops network monitoring in the managed
+            entity. The action starts monitoring in all the available blocks.
+            The number of monitoring blocks may not be the same for different
+            managed entities and it may be that there is only one monitoring
+            block for some of them.
+
+         Tables
+
+         - 'psnLinkStatus' This table containing information about current
+           link status, even when there is no test running.
+
+         - 'psnMonStatsTable': This is a result table that contains information
+           about the number of frames / bytes received on each monitoring block
+           available in the managed entity. Managed entities use to have one
+           monitoring block in each physical test port but they may also have
+           additional monitors for blocks defined by specific filtering rules or
+           other means. Definition of the mechanisms the managed entity uses to
+           define the monitoring blocks available in every moment goes beyond
+           the purpose of this MIB module.
+
+         - 'psnMonSizeTable': This table classifies the total amount of received
+           frames in different frame size ranges. The table contains two index
+           values, one of them identifies the monitoring block (associated to
+           either a physical interface or a filter). The second index is
+           associated to a particular frame size range defined by the managed
+           entity by means a minimum and maximum frame size.
+
+         - 'psnMonEthStatsTable': This is a result table containing details
+           about Ethernet traffic received in each monitoring block. Each block
+           reports information about how many unicast / multicast / broadcast
+           frames have been collected by the block. If supported by the managed
+           entity, this table can be used to classify received Ethernet frames
+           by their structure (VLAN frames, Q-in-Q frames, etc.) or purpose
+           (pause frames, control frames, etc.).
+
+         - 'psnMonIpStatsTable': Result table containing details about network
+           and transport layer protocols received in each monitoring block.
+           Each block reports information about how many unicast / multicast
+           / broadcast packets have been collected by the block. If supported by
+           the managed entity, this table can be used to classify received
+           network traffic by its protocol (IPv4, IPv6, ICMP, UDP).
+
+        - 'psnMonRateStatsTable': Bit rate statistics inform about how many
+           frames and bits are you receiving per time unit and how much of the
+           available bandwidth is being used by the traffic. Bit rate statistics
+           are supplied at different transmission layers, including Ethernet, IP
+           and UDP. IP and UDP are closer to the amount of usable data and
+           Ethernet statistics are more related with the raw bandwidth available
+           for transmission.
+
+         - 'psnMonSlaStatsTable': The Service Level Aggrement (SLA) statistics
+           table contains information about network performance in terms delay,
+           frame loss and other quantitative metrics. SLA statistics are of
+           critical importance to qualify which services are supported by the
+           DUT / SUT and which can only be supplied with considerable
+           degradation. It is assumed that the controlled agent may have the
+           ability to compute the the SLA metrics in various different data
+           streams defined by some filtering rule out of the scope of this MIB
+           module.
+
+         - 'psnMonBerStatsTable': This table contains the counters and
+           statistics necessary to qualify the network performance in terms of
+           transmission errors detected. The basic parameter measured in this
+           case is the Bit Error Ratio (BER) which is the ratio between errored
+           (or lost) bits and the total amount of received bits. If the managed
+           entity supports various simultanous BER analysis blocks, the
+           'psnMonBerStatsTable' contains several rows. Up to one for each
+           analysis block.
+
+         - 'psnMonErrorStatsTable': This is a multilayer error result table
+            with the ability to store results recorded at transmission layers
+            2, 3 and 4. This table allows the error events to be stored in three
+            different ways: by their count, by their ratio against total
+            received frames / packets and by the number of seconds the events
+            have been recorded by the agent. The 'psnMonErrorStatsTable is
+            allowed to be populated with various rows if the managed entity
+            supports several simultaneous error analysis tests.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - Net.Storm GbE Impairment Generator.
+         - Net.Shark GbE Filtering & Aggregation Tap.
+         - Net.Hunter Network Capture Device.
+         - Ether.Giga Gigabit Ethernet Tester.
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION     "201309060000Z" -- 6 September, 2013
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 12 }
+
+--
+-- Top level module structure
+--
+
+psnMonControl      OBJECT IDENTIFIER ::= { psnMonitor 1 }
+
+--
+-- Monitoring enable / disable control group
+--
+
+psnMonEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops network monitoring in the managed entity. The action
+         starts monitoring in all the avaialble blocks. The number of monitoring
+         blocks may not be the same for different managed entities and it may
+         be that there is only one monitoring block for some of them."
+    ::= { psnMonControl 1 }
+
+--
+--  General frame statistics table
+--
+
+psnMonStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a result table that contains information about the number of
+         frames / bytes received on each monitoring block available in the
+         managed entity. Managed entities use to have one monitoring block in
+         each physical test port but they may also have additional monitors for
+         blocks defined by specific filtering rules or other means. Definition
+         of the mechanisms the managed entity uses to define the monitoring
+         blocks available in every moment goes beyond the purpose of this
+         specification."
+    ::= { psnMonitor 2 }
+
+psnMonStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing frame statistics applicable to a particular
+         monitoring block."
+    INDEX { psnMonStatsIndex }
+    ::= { psnMonStatsTable 1 }
+
+PsnMonStatsEntry ::= SEQUENCE {
+    psnMonStatsIndex              TableIndex,
+    psnMonStatsBlockName          DisplayString,
+    psnMonStatsFrames             Counter64,
+    psnMonStatsBytes              Counter64,
+    psnMonStatsStatus             RowStatus
+}
+
+psnMonStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general frame  monitoring
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { psnMonStatsEntry 1 }
+
+psnMonStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { psnMonStatsEntry 2 }
+
+psnMonStatsFrames OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of frames received in the corresponding monitoring block
+         port since the session started. This is a generic counter that
+         aggregates data from all the supported frame formats."
+    ::= { psnMonStatsEntry 3 }
+
+psnMonStatsBytes OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of bytes received in the corresponding monitoring block
+     port since the session started. This is a generic counter that
+     aggregates data from all the supported frame formats. In Ethernet
+     frames, the 7-byte preamble and the 1-byte SDF field are not computed
+     in the result stored by this counter"
+    ::= { psnMonStatsEntry 4 }
+
+psnMonStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonStatsTable'. Enables dynamic creation
+     / deletion of table entries in the current table. Information contained
+     in the table entry may not be available for read / write operations if
+     the status column is set to something different to 'active'. See the
+     REFERENCEd documents to get more information about the encoding and use
+     of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonStatsEntry 5 }
+
+--
+--  Frame size statistics table
+--
+
+psnMonSizeTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonSizeEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table classifies the total amount of received frames in different
+     frame size ranges. The table contains two index values, one of them
+     identifies the monitoring block (associated to either a physical
+     interface or a filter). The second index is associated to a particular
+     frame size range defined by the managed entity by means a minimum and
+     maximum frame size."
+    ::= { psnMonitor 3 }
+
+psnMonSizeEntry OBJECT-TYPE
+    SYNTAX            PsnMonSizeEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing frame statistics applicable to a particular
+     frame size monitoring block."
+    INDEX { psnMonSizeIndex, psnMonSizeRangeIndex }
+    ::= { psnMonSizeTable 1 }
+
+PsnMonSizeEntry ::= SEQUENCE {
+    psnMonSizeIndex               TableIndex,
+    psnMonSizeRangeIndex          TableIndex,
+    psnMonSizeBlockName           DisplayString,
+    psnMonSizeMinBytes            Unsigned32,
+    psnMonSizeMaxBytes            Unsigned32,
+    psnMonSizeFrames              Counter64,
+    psnMonSizeStatus              RowStatus
+
+}
+
+psnMonSizeIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each frame size distribution
+     monitoring block. It is recommended that values are assigned
+     contiguously starting from 1. The value for each block index must
+     remain constant at least from one re-initialization of the entity's
+     network management to the next re-initialization."
+    ::= { psnMonSizeEntry 1 }
+
+psnMonSizeRangeIndex  OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each frame size interval used
+    to classify frames in the associated filtering block. It is recommended
+    that values are assigned contiguously starting from 1. The value for
+    each index must remain constant at least from one re-initialization of
+    the entity's network management to the next re-initialization.
+
+    The current field is defined so that each monitoring block computing
+    frame size distribution is allowed to define its own specific size
+    intervals."
+    ::= { psnMonSizeEntry 2 }
+
+psnMonSizeBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+     textual name to identify the stream whenever possible. The set of
+     'psnMonSizeRangeIndex' values corresponding to the same filtering
+     block ('psnMonSizeIndex') are required to have the same
+     'psnMonSizeBlockName'."
+    ::= { psnMonSizeEntry 3 }
+
+psnMonSizeMinBytes OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum value, expressed in bytes, corresponding to the current frame
+     size interval identified by its 'psnMonSizeRangeIndex' value.
+
+     It is expected that this field content is not modified at least during
+     the duration of a particular monitoring session."
+    ::= { psnMonSizeEntry 4 }
+
+psnMonSizeMaxBytes OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum value, expressed in bytes, corresponding to the current frame
+     size interval identified by its 'psnMonSizeRangeIndex' value.
+
+     It is expected that this field content is not modified at least during
+     the duration of a particular monitoring session."
+    ::= { psnMonSizeEntry 5 }
+
+psnMonSizeFrames OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of frames received in current the frame size interval
+     since the monitoring session started. A particular frame size interval
+     is identified by its 'psnMonSizeRangeIndex', 'psnMonSizeMinBytes' and
+     'psnMonSizeMaxBytes'. This is a generic counter that aggregates data
+     from all the supported frame formats being the minimum and maximum
+     size the only valid parameters deciding to which interval each frame
+     belongs."
+    ::= { psnMonSizeEntry 6 }
+
+psnMonSizeStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonSizeTable'. Enables dynamic creation
+     / deletion of table entries in the current table. Information contained
+     in the table entry may not be available for read / write operations if
+     the status column is set to something different to 'active'. See the
+     REFERENCEd documents to get more information about the encoding and use
+     of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonSizeEntry 7 }
+
+--
+--  Ethernet frame statistics table
+--
+
+psnMonEthStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonEthStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a result table containing details about Ethernet traffic
+         received in each monitoring block. Each block reports information
+         about how many unicast / multicast / broadcast frames have been
+         collected by the block. If supported by the managed entity, this table
+         can be used to classify received Ethernet frames by their structure
+         (VLAN frames, Q-in-Q frames, etc.) or purpose (pause frames, control
+         frames, etc.)."
+    ::= { psnMonitor 4 }
+
+psnMonEthStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonEthStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing Ethernet frame statistics applicable to
+         a particular monitoring block."
+    INDEX { psnMonEthStatsIndex }
+    ::= { psnMonEthStatsTable 1 }
+
+PsnMonEthStatsEntry ::= SEQUENCE {
+    psnMonEthStatsIndex           TableIndex,
+    psnMonEthStatsBlockName       DisplayString,
+    psnMonEthStatsUnicast         Counter64,
+    psnMonEthStatsMulticast       Counter64,
+    psnMonEthStatsBroadcast       Counter64,
+    psnMonEthStatsVlan            Counter64,
+    psnMonEthStats8021ad          Counter64,
+    psnMonEthStatsQinQ            Counter64,
+    psnMonEthStatsControl         Counter64,
+    psnMonEthStatsPause           Counter64,
+    psnMonEthStatsStatus          RowStatus
+}
+
+psnMonEthStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each Ethernet frame  monitoring
+     block. It is recommended that values are assigned contiguously starting
+     from 1. The value for each block index must remain constant at least
+     from one re-initialization of the entity's network management to the
+     next re-initialization."
+    ::= { psnMonEthStatsEntry 1 }
+
+psnMonEthStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnMonEthStatsEntry 2 }
+
+psnMonEthStatsUnicast OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Ethernet unicast frames received from the beginning of
+     the monitoring session.
+
+     Unicast frames are recognised because they contain a unicast
+     destination MAC address. Unicast MAC frames have their multicast bit
+     set to '0'. The multicast bit of a MAC address is the least
+     significant bit of the more significant address byte."
+    ::= { psnMonEthStatsEntry 3 }
+
+psnMonEthStatsMulticast OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Ethernet multicast frames received from the beginning
+     of the monitoring session.
+
+     Ethernet multicast frames have their multicast bit in their destination
+     MAC address set to '1'. The multicast bit of a MAC address is the least
+     significant bit of the more significant address byte."
+    ::= { psnMonEthStatsEntry 4 }
+
+psnMonEthStatsBroadcast OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Ethernet broadcast frames received from the beginning
+     of the monitoring session. Broadcast frames carry the broadcast
+     Ethernet address (FF:FF:FF:FF:FF:FF) in the destination field."
+    ::= { psnMonEthStatsEntry 5 }
+
+psnMonEthStatsVlan OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Ethernet VLAN frames transmitted from the beginning of
+     the monitoring session. IEEE 802.1Q VLAN frames contain an special
+     Ethertype (Type / Length field) value (0x8100)."
+    REFERENCE
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks'."
+    ::= { psnMonEthStatsEntry 6 }
+
+psnMonEthStats8021ad OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Provider Bridge (PB) frames received from the beginning
+     of the monitoring session. PB frames are defined by standard IEEE
+     802.1ad. PB frames contain two VLAN tags referred as C-VLAN and S-VLAN.
+     The C-VLAN carries Type 0x8100. The S-VLAN has the special Type
+     0x88a8."
+    REFERENCE
+        "- IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges'."
+    ::= { psnMonEthStatsEntry 7 }
+
+psnMonEthStatsQinQ OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of double-tagged VLAN frames received from the beginning
+     of the monitoring session. Q-in-Q frames contain an S-VLAN and a C-VLAN
+     but they are not compliant with the IEEE 802.1ad standard. This
+     standard requires the Type field for the S-VLAN to be 0x88a8 but
+     non-standard Q-in-Q frames use different values like 0x8100, 0x9100,
+     0x9200 or 0x9300."
+    ::= { psnMonEthStatsEntry 8 }
+
+psnMonEthStatsControl OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Ethernet MAC control and supervision frames received
+     from the beginning of the monitoring session. Ethernet control frames
+     are recognised due to an special Ethertype (Type / Length field) value
+     (0x8808)."
+    ::= { psnMonEthStatsEntry 9 }
+
+psnMonEthStatsPause OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of Ethernet pause frames received from the beginning of
+     the monitoring session. Pause frames are an special type of control
+     frames and therefore their Ethertype is 0x8808. The specific features
+     of pause frames is that their Opcode field is 0x0001 and their
+     destination MAC address is 01:80:C2:00:00:01 (a multicast MAC
+     address)."
+    ::= { psnMonEthStatsEntry 10 }
+
+psnMonEthStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonEthStatsTable'. Enables dynamic creation
+     / deletion of table entries in the current table. Information contained
+     in the table entry may not be available for read / write operations if
+     the status column is set to something different to 'active'. See the
+     REFERENCEd documents to get more information about the encoding and use
+     of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonEthStatsEntry 11 }
+
+--
+--  Network statistics table
+--
+
+psnMonIpStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonIpStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Result table containing details about network and transport layer
+     protocols received in each monitoring block. Each block reports
+     information about how many unicast / multicast / broadcast packets have
+     been collected by the block. If supported by the managed entity, this
+     table can be used to classify received network traffic by its protocol
+     (IPv4, IPv6, ICMP, UDP)."
+    ::= { psnMonitor 5 }
+
+psnMonIpStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonIpStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing IP packet statistics applicable to a particular
+     monitoring block."
+    INDEX { psnMonIpStatsIndex }
+    ::= { psnMonIpStatsTable 1 }
+
+PsnMonIpStatsEntry ::= SEQUENCE {
+    psnMonIpStatsIndex            TableIndex,
+    psnMonIpStatsBlockName        DisplayString,
+    psnMonIpStatsIpv4             Counter64,
+    psnMonIpStatsIpv4Bytes        Counter64,
+    psnMonIpStatsIpv6             Counter64,
+    psnMonIpStatsIpv6Bytes        Counter64,
+    psnMonIpStatsUnicast          Counter64,
+    psnMonIpStatsMulticast        Counter64,
+    psnMonIpStatsBroadcast        Counter64,
+    psnMonIpStatsUdp              Counter64,
+    psnMonIpStatsUdpBytes         Counter64,
+    psnMonIpStatsIcmp             Counter64,
+    psnMonIpStatsStatus          RowStatus
+}
+
+psnMonIpStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each IP packet monitoring block.
+     It is recommended that values are assigned contiguously starting from
+     1. The value for each block index must remain constant at least from
+     one re-initialization of the entity's network management to the next
+     re-initialization."
+    ::= { psnMonIpStatsEntry 1 }
+
+psnMonIpStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+     textual name to identify the stream whenever possible."
+    ::= { psnMonIpStatsEntry 2 }
+
+psnMonIpStatsIpv4 OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of received IPv4 packets since the beginning of the
+     monitoring session.
+
+     IPv4 packets are encapsulated in Ethernet frames (with or without an
+     LLC / SNAP header) carrying the 0x0800 Type."
+    REFERENCE
+        "- IETF RFC 791: 'Internet Protocol. DARPA Internet program protocol
+       specification'.
+     - IETF RFC 894: 'A Standard for the Transmission of IP Datagrams over
+       Ethernet Networks'."
+    ::= { psnMonIpStatsEntry 3 }
+
+psnMonIpStatsIpv4Bytes OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "Bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of received IPv4 bytes since the the beginning of the
+     monitoring session.
+
+     IPv4 packets are encapsulated in Ethernet frames (with or without an
+     LLC / SNAP header) carrying the 0x0800 Type."
+    REFERENCE
+        "- IETF RFC 791: 'Internet Protocol. DARPA Internet program protocol
+       specification'.
+     - IETF RFC 894: 'A Standard for the Transmission of IP Datagrams over
+       Ethernet Networks'."
+    ::= { psnMonIpStatsEntry 4 }
+
+psnMonIpStatsIpv6 OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of received IPv6 packets since the the beginning of the
+     monitoring session.
+
+     IPv4 packets are encapsulated in Ethernet frames (with or without an
+     LLC / SNAP header) carrying the 0x86DD Type."
+    REFERENCE
+        "- IETF RFC 2460: 'Internet Protocol. Version 6 (IPv6) Specification'.
+     - IETF RFC 2464: 'Transmission of IPv6 Packets over Ethernet
+       Networks'."
+    ::= { psnMonIpStatsEntry 5 }
+
+psnMonIpStatsIpv6Bytes OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of received IPv6 bytes since the the beginning of the
+     monitoring session.
+
+     IPv4 packets are encapsulated in Ethernet frames (with or without an
+     LLC / SNAP header) carrying the 0x86DD Type."
+    REFERENCE
+        "- IETF RFC 2460: 'Internet Protocol. Version 6 (IPv6) Specification'.
+     - IETF RFC 2464: 'Transmission of IPv6 Packets over Ethernet
+       Networks'."
+    ::= { psnMonIpStatsEntry 6 }
+
+psnMonIpStatsUnicast OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total count of unicast IPv4 and IPv6 packets received since the
+     beginning of the monitoring session.
+
+     An IPv4 unicast packet is a packet directed to a unicast IPv4 address.
+     An IPv4 unicast address is any valid, not-broadcast Class A (1.0.0.1 -
+     126.255.255.254), Class B (128.1.0.1 - 191.255.255.254) or Class C
+     (192.0.0.1 - 192.255.254.254) address.
+
+     An IPv6 unicast packet is a packet directed to a unicast IPv6 address.
+     All non-multicast IPv6 (prefix ff00::/8) packets are considered to be
+     unicast."
+    REFERENCE
+        "- IETF RFC 791: 'Internet Protocol. DARPA Internet program protocol
+       specification'.
+     - IETF RFC 2373: 'IP Version 6 Addressing Architecture'.
+         - IETF RFC 2460: 'Internet Protocol. Version 6 (IPv6) Specification'."
+    ::= { psnMonIpStatsEntry 7 }
+
+psnMonIpStatsMulticast OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total count of multicast IPv4 and IPv6 packets received from the
+     beginning of the monitoring session.
+
+     An IPv4 multicast packet is a packet directed to a multicast IPv4
+     address. An IPv4 multicast address is any valid Class D (224.0.0.0 -
+     239.255.255.255) address.
+
+     An IPv6 multicast packet is a packet directed to a multicast IPv6
+     address. IPv6 multicast addresses is an address starting with the
+     ff00::/8 prefix."
+    REFERENCE
+        "- IETF RFC 791: 'Internet Protocol. DARPA Internet program protocol
+       specification'.
+     - IETF RFC 2373: 'IP Version 6 Addressing Architecture'.
+         - IETF RFC 2460: 'Internet Protocol. Version 6 (IPv6) Specification'."
+    ::= { psnMonIpStatsEntry 8 }
+
+psnMonIpStatsBroadcast OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total count of broadcast IPv4 packets received from the beginning of
+     the monitoring session.
+
+     An IPv4 broadcast packet is a packet directed to the currently
+     configured network broadcast address or the global broadcast address
+     (255.255.255.255). The network broadcast address is the IPv4 address
+     that has all the host bits set to 1.
+
+     IPv6 starndards do not define broadcast addresses. There are
+     therefore not counted."
+    REFERENCE
+        "- IETF RFC 791: 'Internet Protocol. DARPA Internet program protocol
+       specification'.
+     - IETF RFC 2373: 'IP Version 6 Addressing Architecture'.
+         - IETF RFC 2460: 'Internet Protocol. Version 6 (IPv6) Specification'."
+    ::= { psnMonIpStatsEntry 9 }
+
+psnMonIpStatsUdp OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total count of UDP packets received from the beginning of the
+         monitoring session.
+
+         UDP packets or segments are IPv4 or IPv6 packets carrying the User
+         Datagram Protocol (UDP) defined in RFC 768. The protocol number / next
+         header code assigned to UDP is 17."
+    REFERENCE
+        "- IETF RFC 768: 'User Datagram Protocol'."
+    ::= { psnMonIpStatsEntry 10 }
+
+
+psnMonIpStatsUdpBytes OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total count of UDP bytes received from the beginning of the
+         monitoring session.
+
+         UDP packets or segments are IPv4 or IPv6 packets carrying the User
+         Datagram Protocol (UDP) defined in RFC 768. The protocol number / next
+         header code assigned to UDP is 17."
+    REFERENCE
+        "- IETF RFC 768: 'User Datagram Protocol'."
+    ::= { psnMonIpStatsEntry 11 }
+
+psnMonIpStatsIcmp OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "packets"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Aggregated count of ICMP and ICMPv6 messages received from the
+     beginning of the monitoring session.
+
+     ICMP packets or messages are IP packets carrying carry the Internet
+     Control Message Protocol (ICMP) messages defined in RFC 792. ICMPv6
+     messsages carry the version 6 of Internet Control Message Protocol
+     defined in RFC 4443.
+
+     The protocol number assigned to ICMP is 1. For ICMPv6 the protocol
+     number is 58."
+    REFERENCE
+        "- IETF RFC 792: 'Internet Control Message Protocol'.
+     - IETF RFC 4443: 'Internet Control Message Protocol (ICMPv6) for the
+       Intenet Protocol Version 6 Specificaton'."
+    ::= { psnMonIpStatsEntry 12 }
+
+psnMonIpStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonIpStatsTable'. Enables dynamic creation
+     / deletion of table entries in the current table. Information contained
+     in the table entry may not be available for read / write operations if
+     the status column is set to something different to 'active'. See the
+     REFERENCEd documents to get more information about the encoding and use
+     of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonIpStatsEntry 13 }
+
+--
+--  Bandwidth statistics table
+--
+
+psnMonRateStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonRateStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Bit rate statistics inform about how many frames and bits are
+     you receiving per time unit and how much of the available bandwidth is
+     being used by the traffic. Bit rate statistics are supplied at
+     different transmission layers, including Ethernet, IP and UDP. IP and
+     UDP are closer to the amount of usable data and Ethernet statistics are
+     more related with the raw bandwidth available for transmission."
+    ::= { psnMonitor 6 }
+
+psnMonRateStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonRateStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing bit rate statistics applicable to a particular
+     monitoring block."
+    INDEX { psnMonRateStatsIndex }
+    ::= { psnMonRateStatsTable 1 }
+
+PsnMonRateStatsEntry ::= SEQUENCE {
+    psnMonRateStatsIndex          TableIndex,
+    psnMonRateStatsBlockName      DisplayString,
+    psnMonRateStatsEth            Counter32,
+    psnMonRateStatsEthBps         Counter32,
+    psnMonRateStatsEthPercent     RatioPercentage,
+    psnMonRateStatsEthMin         Counter32,
+    psnMonRateStatsEthMinBps      Counter32,
+    psnMonRateStatsEthMinPercent  RatioPercentage,
+    psnMonRateStatsEthMax         Counter32,
+    psnMonRateStatsEthMaxBps      Counter32,
+    psnMonRateStatsEthMaxPercent  RatioPercentage,
+    psnMonRateStatsEthUnicast     Counter32,
+    psnMonRateStatsEthMulticast   Counter32,
+    psnMonRateStatsEthBroadcast   Counter32,
+    psnMonRateStatsIpv4           Counter32,
+    psnMonRateStatsIpv4Bps        Counter32,
+    psnMonRateStatsIpv4Percent    RatioPercentage,
+    psnMonRateStatsIpv6           Counter32,
+    psnMonRateStatsIpv6Bps        Counter32,
+    psnMonRateStatsIpv6Percent    RatioPercentage,
+    psnMonRateStatsUdp            Counter32,
+    psnMonRateStatsUdpBps         Counter32,
+    psnMonRateStatsUdpPercent     RatioPercentage,
+    psnMonRateStatsStatus         RowStatus
+}
+
+psnMonRateStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each bit rate monitoring block.
+     It is recommended that values are assigned contiguously starting from
+     1. The value for each block index must remain constant at least from
+     one re-initialization of the entity's network management to the next
+     re-initialization."
+    ::= { psnMonRateStatsEntry 1 }
+
+psnMonRateStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+     textual name to identify the stream whenever possible."
+    ::= { psnMonRateStatsEntry 2 }
+
+psnMonRateStatsEth OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Ethernet traffic received during the last second
+         computed in frames per second.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 3 }
+
+psnMonRateStatsEthBps OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Ethernet traffic received during the last second
+         computed in bits per second.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 4 }
+
+psnMonRateStatsEthPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of Ethernet traffic received during the last second
+         computed as a percentage of the total channel capacity.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 5 }
+
+psnMonRateStatsEthMin OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum value of Ethernet traffic registered from the beginning of the
+     monitoring session. The 'psnMonRateStatsEthMin' value displays the
+     minimum value ever stored in the 'psnMonRateStatsEth' field since the
+     test started.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 6 }
+
+psnMonRateStatsEthMinBps OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum value of Ethernet traffic registered from the beginning of the
+     monitoring session. The 'psnMonRateStatsEthMinBps' value displays the
+     minimum value ever stored in the 'psnMonRateStatsEthBps' field since
+     the test started.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 7 }
+
+psnMonRateStatsEthMinPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum value of Ethernet traffic registered from the beginning of the
+     monitoring session. The 'psnMonRateStatsEthMinPercent' value displays
+     the minimum value ever stored in the 'psnMonRateStatsEthPercent' field
+     since the test started.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 8 }
+
+psnMonRateStatsEthMax OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum value of Ethernet traffic registered from the beginning of the
+     monitoring session.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 9 }
+
+psnMonRateStatsEthMaxBps OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum value of Ethernet traffic registered from the beginning of the
+     monitoring session. The 'psnMonRateStatsEthMinBps' value displays the
+     minimum value stored in the 'psnMonRateStatsEthBps' field since the
+     test started.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 10 }
+
+psnMonRateStatsEthMaxPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum value of Ethernet traffic registered from the beginning of the
+     monitoring session. The 'psnMonRateStatsEthMaxPercent' value displays
+     the maximum value stored in the 'psnMonRateStatsEthPercent' field since
+     the test started.
+
+     The frame bits considered in Ethernet traffic statistics are those
+     between the first bit of the destination address field to the last
+     bit of the FCS field. Ethernet tagged frames (VLAN, Q-in-Q, IEEE
+     802.1ad) are also included in this result."
+    ::= { psnMonRateStatsEntry 11 }
+
+ psnMonRateStatsEthUnicast OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of unicast Ethernet traffic received during the last
+     second computed in frames per second.
+
+     Unicast frames are recognised because they contain a unicast
+     destination MAC address. Unicast MAC frames have their multicast bit
+     set to '0'. The multicast bit of a MAC address is the least significant
+     bit of the more significant address byte."
+    ::= { psnMonRateStatsEntry 12 }
+
+psnMonRateStatsEthMulticast OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of multicast Ethernet traffic received during the last
+     second computed in frames per second.
+
+     Ethernet multicast frames have their multicast bit in their destination
+     MAC address set to '1'. The multicast bit of a MAC address is the least
+     significant bit of the more significant address byte."
+    ::= { psnMonRateStatsEntry 13 }
+
+psnMonRateStatsEthBroadcast OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of broadcast Ethernet traffic received during the last
+     second computed in frames per second. Broadcast Ethernet frames carry
+     the broadcast Ethernet address (FF:FF:FF:FF:FF:FF) in the destination
+     field."
+    ::= { psnMonRateStatsEntry 14 }
+
+psnMonRateStatsIpv4 OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of IPv4 traffic received during the last second computed
+     in frames per second."
+    ::= { psnMonRateStatsEntry 15 }
+
+psnMonRateStatsIpv4Bps OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of IPv4 traffic received during the last second computed
+     in bits per second."
+    ::= { psnMonRateStatsEntry 16 }
+
+psnMonRateStatsIpv4Percent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of IPv4 traffic received during the last second
+     expressed as a percentage of the nominal transmission capacity."
+    ::= { psnMonRateStatsEntry 17 }
+
+psnMonRateStatsIpv6 OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of IPv6 traffic received during the last second computed
+     in frames per second."
+    ::= { psnMonRateStatsEntry 18 }
+
+psnMonRateStatsIpv6Bps OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of IPv6 traffic received during the last second computed
+     in bits per second."
+    ::= { psnMonRateStatsEntry 19 }
+
+psnMonRateStatsIpv6Percent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of IPv6 traffic received during the last second
+     expressed as a percentage of the nominal transmission capacity."
+    ::= { psnMonRateStatsEntry 20 }
+
+psnMonRateStatsUdp OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "frames/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of traffic associated to the Ethernet / IP / UDP payloads
+     computed in frames per second."
+    ::= { psnMonRateStatsEntry 21 }
+
+psnMonRateStatsUdpBps OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of traffic associated to the Ethernet / IP / UDP payloads
+     computed in bits per second."
+    ::= { psnMonRateStatsEntry 22 }
+
+psnMonRateStatsUdpPercent OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of traffic associated to the Ethernet / IP / UDP payloads
+     expressed as a percentage of the nominal transmission capacity."
+    ::= { psnMonRateStatsEntry 23 }
+
+psnMonRateStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonRateStatsTable'. Enables dynamic creation
+     / deletion of table entries in the current table. Information contained
+     in the table entry may not be available for read / write operations if
+     the status column is set to something different to 'active'. See the
+     REFERENCEd documents to get more information about the encoding and use
+     of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonRateStatsEntry 24 }
+
+--
+--  SLA statistics table
+--
+
+psnMonSlaStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonSlaStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+    "The Service Level Aggrement (SLA) statistics table contains information
+     about network performance in terms delay, frame loss and other
+     quantitative metrics. SLA statistics are of critical importance to
+     qualify which services are supported by the DUT / SUT and which can
+     only be supplied with considerable degradation. It is assumed that the
+     controlled agent may have the ability to compute the the SLA metrics
+     in various different data streams defined by some filtering rule out of
+     the scope of this MIB module."
+    ::= { psnMonitor 7 }
+
+psnMonSlaStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonSlaStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing SLA statistics applicable to a particular
+     monitoring block."
+    INDEX { psnMonSlaStatsIndex }
+    ::= { psnMonSlaStatsTable 1 }
+
+PsnMonSlaStatsEntry ::= SEQUENCE {
+    psnMonSlaStatsIndex           TableIndex,
+    psnMonSlaStatsBlockName       DisplayString,
+    psnMonSlaFtd                  TimeIntervalMicroS,
+    psnMonSlaFtdMax               TimeIntervalMicroS,
+    psnMonSlaFtdMin               TimeIntervalMicroS,
+    psnMonSlaFtdMean              TimeIntervalMicroS,
+    psnMonSlaFtdStdev             TimeIntervalMicroS,
+    psnMonSlaFtdRange             TimeIntervalMicroS,
+    psnMonSlaFdv                  TimeIntervalMicroS,
+    psnMonSlaFdvMax               TimeIntervalMicroS,
+    psnMonSlaFdvMean              TimeIntervalMicroS,
+    psnMonSlaReordered            Counter64,
+    psnMonSlaDuplicated           Counter64,
+    psnMonSlaLost                 Counter64,
+    psnMonSlaFlr                  RatioPercentage,
+    psnMonSlaPeu                  RatioPercentage,
+    psnMonSlaStatsStatus          RowStatus
+}
+
+psnMonSlaStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each bit rate monitoring block.
+     It is recommended that values are assigned contiguously starting from
+     1. The value for each block index must remain constant at least from
+     one re-initialization of the entity's network management to the next
+     re-initialization."
+    ::= { psnMonSlaStatsEntry 1 }
+
+psnMonSlaStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+     textual name to identify the stream whenever possible."
+    ::= { psnMonSlaStatsEntry 2 }
+
+psnMonSlaFtd OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current value of the point-to-point Ethernet Frame Delay computed as
+     specified in ITU-T Y.1563 and expressed in ms."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+       performance'."
+    ::= { psnMonSlaStatsEntry 3 }
+
+psnMonSlaFtdMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Peak value of FTD registered from the beginning of the session. The
+     'psnMonSlaFtdMax' value is a frame by frame computed statistic. All
+     relevant SLA frames are considered for calculation of this metric."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+       performance'."
+    ::= { psnMonSlaStatsEntry 4 }
+
+psnMonSlaFtdMin OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum value of FTD registered from the beginning of the session. The
+     'psnMonSlaFtdMin' value is a frame by frame computed statistic. All
+     relevant SLA frames are considered for calculation of this metric."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+       performance'."
+    ::= { psnMonSlaStatsEntry 5 }
+
+psnMonSlaFtdMean OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Average of all registered FTD values from the beginning of the session.
+         All relevant SLA packets are considered for calculation of this
+         statistics (no sampling process is involved in the calculation
+         of this statistic)."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+       performance'."
+    ::= { psnMonSlaStatsEntry 6 }
+
+psnMonSlaFtdStdev OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Standard deviation (positive square root of the variance) corresponding
+     with all the registered FTD values from the beginning of the session.
+     The standard deviation quantifies the delay dispersion or delay
+     variation found in the DUT / SUT."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+       performance'."
+    ::= { psnMonSlaStatsEntry 7 }
+
+psnMonSlaFtdRange OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This performance metric is the result of subtracting 'psnMonSlaFtdMax'
+     from 'psnMonSlaFtdMax'. The range is an alternative way to the
+     standard deviation to quantify the delay dispersion found in the DUT /
+     SUT."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+       performance'."
+    ::= { psnMonSlaStatsEntry 8 }
+
+psnMonSlaFdv OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current value of the jitter computed as per RFC 3393 and RFC 1889.
+         Delay variation is computed over consecutively transmitted packets. The
+         jitter value is smoothed with the function defined in RFC 1889 before
+         being displayed.
+
+         The current jitter constitutes still another metric to quantify the
+         delay variation in the DUT / SUT."
+    REFERENCE
+        "- RFC 1889: 'RTP: A Transport Protocol for Real-Time Applications'.
+         - RFC 3393: 'IP Packet Delay Variation Metric for IP Performance
+           Metrics(IPPM)'."
+    ::= { psnMonSlaStatsEntry 9 }
+
+psnMonSlaFdvMax OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Smoothed jitter maximum computed from the beginning of the session.
+         The 'psnMonSLAFdvMax' is a packet-by-packet statistic that does not
+         involve any sampling process."
+    REFERENCE
+        "- RFC 1889: 'RTP: A Transport Protocol for Real-Time Applications'.
+         - RFC 3393: 'IP Packet Delay Variation Metric for IP Performance
+           Metrics(IPPM)'."
+    ::= { psnMonSlaStatsEntry 10 }
+
+psnMonSlaFdvMean OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    UNITS             "ms"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Average of all individual delay variation values computed from the
+     beginning of the test.
+
+     Each individual delay variation is evaluated as the absolute value of
+     the FTD associated to a given frame minus the FTD associated to the
+     frame transmitted next. All possible consecutive frame transmission
+     events are taken into account for the calculation of this performance
+     metric. The only exception to this rule is if one or both frames are
+     lost."
+    REFERENCE
+        "- RFC 1889: 'RTP: A Transport Protocol for Real-Time Applications'.
+     - RFC 3393: 'IP Packet Delay Variation Metric for IP Performance
+       Metrics(IPPM)'."
+    ::= { psnMonSlaStatsEntry 11 }
+
+psnMonSlaReordered OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of packets received with an unexpected sequence number.
+    Duplicated sequence numbers are not taken into account for computing
+    the 'psnMonSlaReordered' metric."
+    REFERENCE
+        "- RFC 5236: 'Improved Packet Reordering Metrics'."
+    ::= { psnMonSlaStatsEntry 12 }
+
+psnMonSlaDuplicated OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of frames received with a duplicated sequence number. A
+         triplicated frame event is accounted as two duplicated frame events.
+         The same reasoning is applied for frames repeated more than three
+         times."
+    REFERENCE
+        "- RFC 5236: 'Improved Packet Reordering Metrics'."
+    ::= { psnMonSlaStatsEntry 13 }
+
+psnMonSlaLost OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total amount of lost frames from the beginning of the monitoring
+         session. One frame is considered to be lost if it is never received out
+         of the expected reception window."
+    REFERENCE
+        "- RFC 5236: 'Improved Packet Reordering Metrics'."
+    ::= { psnMonSlaStatsEntry 14 }
+
+psnMonSlaFlr OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio of the total amount of lost frames to the total transmitted
+         frames from the beginning of the monitoring session."
+    REFERENCE
+        "- RFC 5236: 'Improved Packet Reordering Metrics'."
+    ::= { psnMonSlaStatsEntry 15 }
+
+psnMonSlaPeu OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Percent Ethernet service Unavailability defined as per ITU-T Y.1563 and
+         recorded from the beginning of the monitoring session.
+
+         The PEU constitutes a availability performance figure that informs
+         about the percentage of time that the DUT / SUT has been not available
+         for transmitting / receiving data."
+    REFERENCE
+        "- ITU-T Y.1563: 'Ethernet frame transfer and availability
+           performance'."
+    ::= { psnMonSlaStatsEntry 16 }
+
+psnMonSlaStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonSlaStatsTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonSlaStatsEntry 17 }
+
+--
+--  BER statistics table
+--
+
+psnMonBerStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonBerStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains the counters and statistics necessary to qualify
+         the network performance in terms of transmission errors detected. The
+         basic parameter measured in this case is the Bit Error Ratio (BER)
+         which is the ratio between errored (or lost) bits and the total amount
+         of received bits. If the managed entity supports various simultanous
+         BER analysis blocks, the 'psnMonBerStatsTable' contains several rows.
+         Up to one for each analysis block."
+    ::= { psnMonitor 8 }
+
+psnMonBerStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonBerStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing BER statistics applicable to a particular
+         monitoring block."
+    INDEX { psnMonBerStatsIndex }
+    ::= { psnMonBerStatsTable 1 }
+
+PsnMonBerStatsEntry ::= SEQUENCE {
+    psnMonBerStatsIndex           TableIndex,
+    psnMonBerStatsBlockName       DisplayString,
+    psnMonBerStatsLss             Counter32,
+    psnMonBerStatsTse             Counter64,
+    psnMonBerStatsBer             RatioPercentage,
+    psnMonBerStatsEs              Counter32,
+    psnMonBerStatsStatus          RowStatus
+}
+
+psnMonBerStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each bit rate monitoring block.
+         It is recommended that values are assigned contiguously starting from
+         1. The value for each block index must remain constant at least from
+         one re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { psnMonBerStatsEntry 1 }
+
+psnMonBerStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { psnMonBerStatsEntry 2 }
+
+psnMonBerStatsLss OBJECT-TYPE
+    SYNTAX            Counter32
+    UNITS             "s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Loss of Sequence Synchronization (LSS) error. This event indicates that
+         the expected test pattern does not match the actually received test
+         pattern. The result is the cummulative number of seconds in which
+         this event has been registered accounted from the beginning of the
+         monitoring session registered this event "
+    ::= { psnMonBerStatsEntry 3 }
+
+psnMonBerStatsTse OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Test Sequence Error (TSE) count. One TSE is equivalent to a single bit
+         difference between the transmitted and the received test pattern (PRBS
+         or other). This field is a cumulative counter of all the TSE events
+         found from the beginning of the monitoring session.
+
+         In framed Ethernet interfaces transmission errors may cause the test
+         patterns to be altered and produce bit errors. However, the Ethernet
+         FCS field contains a CRC-32 code designed for error detection. For this
+         reason, the receiver (or any intermediate network element) may detect
+         and discard the frame before any TSE is detected by the pattern
+         analyser. The only way to account for TSE errors would be to recompute
+         the FCS field after any transmission error."
+    ::= { psnMonBerStatsEntry 4 }
+
+psnMonBerStatsBer OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Bit Error Ratio (BER). This is the ratio of the received TSE to the
+         total amount of transmitted bits since the beginning of the monitoring
+         session.
+
+         The BER is one of the most fundamental quality parameters of TDM
+         digital circuits. However, due to other degradation sources specific of
+         statistically multiplexed networks (frame loss, variable frame delay),
+         the performance description based on the BER may be incomplete in
+         Ethernet / IP networks."
+    ::= { psnMonBerStatsEntry 5 }
+
+psnMonBerStatsEs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This is the amount of Errored Second (ES) outcomes from the beginning
+         of the monitoring session. An ES is defined as a second which contains
+         at least one TSE or a higher order defect like an LSS."
+    ::= { psnMonBerStatsEntry 6 }
+
+psnMonBerStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonBerStatsTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonBerStatsEntry 7 }
+
+--
+--  Error statistics table
+--
+
+psnMonErrorStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMonErrorStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a multilayer error result table with the ability to store
+         results recorded at transmission layers 2, 3 and 4. This table allows
+         the error events to be stored in three different ways: by their count,
+         by their ratio against total received frames / packets and by the
+         number of seconds the events have been recorded by the agent. The
+         'psnMonErrorStatsTable is allowed to be populated with various rows if
+         the managed entity supports several simultaneous error analysis tests."
+    ::= { psnMonitor 9 }
+
+psnMonErrorStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMonErrorStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing error statistics applicable to a particular
+         monitoring block."
+    INDEX { psnMonErrorStatsIndex }
+    ::= { psnMonErrorStatsTable 1 }
+
+PsnMonErrorStatsEntry ::= SEQUENCE {
+    psnMonErrorStatsIndex         TableIndex,
+    psnMonErrorStatsBlockName     DisplayString,
+    psnMonErrorStatsUnderS        Counter64,
+    psnMonErrorStatsUnderSRate    RatioPercentage,
+    psnMonErrorStatsUnderSSecs    Counter32,
+    psnMonErrorStatsOverS         Counter64,
+    psnMonErrorStatsOverSRate     RatioPercentage,
+    psnMonErrorStatsOverSSecs     Counter32,
+    psnMonErrorStatsJabber        Counter64,
+    psnMonErrorStatsJabberRate    RatioPercentage,
+    psnMonErrorStatsJabberSecs    Counter32,
+    psnMonErrorStatsIp            Counter64,
+    psnMonErrorStatsIpRate        RatioPercentage,
+    psnMonErrorStatsIpSecs        Counter32,
+    psnMonErrorStatsUdp           Counter64,
+    psnMonErrorStatsUdpRate       RatioPercentage,
+    psnMonErrorStatsUdpSecs       Counter32,
+    psnMonErrorStatsStatus        RowStatus,
+    psnMonErrorStatsFCS           Counter64,
+    psnMonErrorStatsFCSRate       RatioPercentage,
+    psnMonErrorStatsFCSSecs       Counter32
+}
+
+psnMonErrorStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each bit rate monitoring block.
+         It is recommended that values are assigned contiguously starting from
+         1. The value for each block index must remain constant at least from
+         one re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { psnMonErrorStatsEntry 1 }
+
+psnMonErrorStatsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { psnMonErrorStatsEntry 2 }
+
+psnMonErrorStatsUnderS OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of received frames which are smaller than 64 bytes
+         accounted from the beginning of the monitoring session."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 3 }
+
+psnMonErrorStatsUnderSRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total amount of received frames and the undersized
+         frames received within the same period (and accounted in the
+         'psnMonErrorStatsUnderS' register) expressed as a percentage."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 4 }
+
+psnMonErrorStatsUnderSSecs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one undersized frame event as
+         accounted in the 'psnMonErrorStatsUnderS' register associated to the
+         current statistics generation block. The test result is referenced to
+         the beginning of the current monitoring session."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 5 }
+
+psnMonErrorStatsOverS OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of received frames which are larger than the configured
+         MTU accounted from the beginning of the monitoring session."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 6 }
+
+psnMonErrorStatsOverSRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total amount of received frames and the oversized
+         frames received within the same period (and accounted in the
+         'psnMonErrorStatsOverS' register) expressed as a percentage."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 7 }
+
+psnMonErrorStatsOverSSecs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one undersized frame event as
+         accounted in the 'psnMonErrorStatsUnderS' register associated to the
+         current statistics generation block. The test result is referenced to
+         the beginning of the current monitoring session."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 8 }
+
+psnMonErrorStatsJabber OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Jabber count from the beginning of the test. A Jabber is defined as a
+         frame longer than 1518 bytes with a bad CRC."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 9 }
+
+psnMonErrorStatsJabberRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total amount of received frames and jabbers received
+         within the same period (and accounted in the 'psnMonErrorStatsJabber'
+         register) expressed as a percentage."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 10 }
+
+psnMonErrorStatsJabberSecs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one jabber as accounted in the
+         'psnMonErrorStatsJabber' register associated to the current statistics
+         generation block. The test result is referenced to the beginning of the
+         current monitoring session."
+    REFERENCE
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { psnMonErrorStatsEntry 11 }
+
+psnMonErrorStatsIp OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays information about the total number of errored IPv4 and IPv6
+         packets received from the beginning of the monitoring session.
+
+         An IPv4 or IPv6 packet is declared an errored packet if it is
+         improperly built: Datagram header has an unexpected structure, field
+         values are different to the expected ones or it has an unexpected
+         length. An IPv4 datagram is also considered to be invalid if it
+         contains checksum errors."
+    REFERENCE
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'.
+         - RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification'."
+    ::= { psnMonErrorStatsEntry 12 }
+
+psnMonErrorStatsIpRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total amount of received and errored IPv4 or
+         IPv6 packets received within the same period (and accounted in
+         the 'psnMonErrorStatsIp' register) and expressed as a percentage."
+    REFERENCE
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'.
+         - RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification'."
+    ::= { psnMonErrorStatsEntry 13 }
+
+psnMonErrorStatsIpSecs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one IPv4 / IPv6 error as
+         accounted in the 'psnMonErrorStatsIp' register associated to the
+         current statistics generation block. The test result is referenced to
+         the beginning of the current monitoring session."
+    REFERENCE
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'.
+         - RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification'."
+    ::= { psnMonErrorStatsEntry 14 }
+
+psnMonErrorStatsUdp OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays information about the total number of errored UDP packets
+         registered from the beginning of the monitoring session.
+
+         UDP packets are considered to contain errors if either their structure
+         or their content is invalid. For UDP, this means that the packet has an
+         unexpected length or it contains checksum errors."
+    REFERENCE
+        "- RFC 768 'User Datagram Protocol'"
+    ::= { psnMonErrorStatsEntry 15 }
+
+psnMonErrorStatsUdpRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total amount of received and errored UDP packets
+         received within the same period (and accounted in the
+         'psnMonErrorStatsIp' register) and expressed as a percentage."
+    REFERENCE
+        "- RFC 768 'User Datagram Protocol'"
+    ::= { psnMonErrorStatsEntry 16 }
+
+psnMonErrorStatsUdpSecs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one UDP error as accounted in
+         the 'psnMonErrorStatsIp' register associated to the current statistics
+         generation block. The test result is referenced to the beginning of the
+         current monitoring session."
+    REFERENCE
+        "- RFC 768 'User Datagram Protocol'"
+    ::= { psnMonErrorStatsEntry 17 }
+
+psnMonErrorStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMonErrorStatsTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMonErrorStatsEntry 18 }
+
+psnMonErrorStatsFCS OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays information about the total number of frames with FCS
+         errors registered from the beginning of the monitoring session."
+    ::= { psnMonErrorStatsEntry 19 }
+
+psnMonErrorStatsFCSRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Ratio between the total amount of received frames and frames with FCS
+         errors received within the same period and expressed as a percentage."
+    ::= { psnMonErrorStatsEntry 20 }
+
+psnMonErrorStatsFCSSecs OBJECT-TYPE
+    SYNTAX            Counter32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Number of seconds containing at least one frame with an FCS error
+         associated to the current statistics generation block.  The test
+         result is referenced to the beginning of the current monitoring
+         session."
+    ::= { psnMonErrorStatsEntry 21 }
+
+
+psnLinkStatusTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnLinkStatusEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This is a result table that contains information about
+    status link, even when there is no test running."
+    ::= { psnMonitor 10}
+
+psnLinkStatusEntry OBJECT-TYPE
+    SYNTAX            PsnLinkStatusEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available instances."
+    INDEX { psnLinkStatusInstance }
+    ::= { psnLinkStatusTable 1 }
+
+PsnLinkStatusEntry ::= SEQUENCE {
+    psnLinkStatusInstance         TableIndex,
+    psnLinkStatusName             DisplayString,
+    psnLinkStatusValue            INTEGER,
+    psnLinkRowStatus              RowStatus
+}
+
+psnLinkStatusInstance  OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each instance.
+         It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity network management
+         to the next re-initialization."
+    ::= { psnLinkStatusEntry 1 }
+
+psnLinkStatusName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+         an interface text name, such as 'eth0', a stream identifier such as
+         eth0.0 or just anything describing the instance such as eth0-linkled.
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { psnLinkStatusEntry 2 }
+
+psnLinkStatusValue OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          mbps10    (0),
+                          mbps100   (1),
+                          mbps1000  (2),
+                          gbps10    (3),
+                          notlink   (4)}
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicate link status in the port:
+        - mbps10  : The port is operating at 10 Gb/s from the SFP+ port.
+        - mbps100 : The port is operating at 1000 Mb/s either from the
+                    optical or the electrical port.
+        - mbps1000: The port is operating at 100 Mb/s from the electrical port.
+        - gbps10  : The port is operating at 10 Mb/s from the electrical port.
+        - notlink : The link was not detected, there is no signal detected
+                    in the port or auto-negotiation fails."
+     ::= { psnLinkStatusEntry 3 }
+
+psnLinkRowStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'PsnLinkStatusEntry'. Enables
+         dynamic creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCE documents to get more
+         information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= {psnLinkStatusEntry 4}
+
+END

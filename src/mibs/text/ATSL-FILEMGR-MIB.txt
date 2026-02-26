@@ -1,0 +1,160 @@
+ATSL-FILEMGR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for File Management.
+--
+
+IMPORTS
+    MODULE-IDENTITY                                       FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION                                    FROM SNMPv2-TC
+    atslGeneral                                           FROM ATSL-MIB;
+
+fileManager MODULE-IDENTITY
+    LAST-UPDATED "201404280000Z" -- 28 April, 2014
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module provides resources for basic file management
+		operations, such as file listing, deletion, copying, renaming, import,
+		export, etc. 
+
+		Files are divided into classes depending on their content type, for
+	    instance: configuration files, report files, capture files, etc. 
+	    Depending on the file class certain file operation can be carried
+	    out, such as file deletion, renaming, and import/export from/to
+	    external media.  Not all operations are supported for all file
+	    classes, as some operations don't make sense for certain classes of
+	    files.
+
+		In general, there is a separate sub-tree for each file class, and
+		each sub-tree typically contains two tables: a FileList
+		table which lists all files of that class that are present in the
+		test unit, and a FileOperations table which can be used to perform
+		operations on each individual file."
+
+    REVISION     "201404280000Z" -- 28 April, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 15 }
+
+
+-- All files managed by the File Manager are accessible under the
+-- fileClasses sub-tree.  Please refer to the corresponding MIB file for
+-- each individual file class.
+
+fileClasses     OBJECT IDENTIFIER ::= { fileManager 1 }
+
+-- 
+-- Textual conventions
+--
+
+FileAction ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the available types of file operations that can be
+		performed on a file.  Note that not all operations may be supported
+		for each tyoe of file.  Please refer to the description in the
+		corresponding operations table for a particular type of file
+
+		- 'idle' : No operation specified.
+
+		- 'delete': Delete the file specified in the operations table. 
+
+		- 'rename': Renames the file specified in the operations table to
+		  the new name specified in the Arg cell.  
+
+		- 'import' : Moves the file from the device specified in the
+		  operations table to the internal storage volume of the unit.  Note
+		  that the name of the internal volume must be specified in the Args
+		  column of the operations table (usually named 'internal').
+
+		- 'export' : Moves the file from the internal storage
+		  volume of the unit to the volume specified in the Args column of
+	      the table.
+
+		- 'load' : If the file is a configuration file, it is loaded and
+		  applied set as the current configuration of the unit. For other
+		  types of files, this operation is not supported.
+
+		- 'save' : Saves the current configuration of the unit to the file
+		  specified in the operation. This operation is only supported for
+		  configuration files.
+		"
+
+    SYNTAX   INTEGER {
+				idle (0),
+                delete (1),
+                rename (2),
+				import (3),
+		        export (4),
+		        load (32),
+		        save (33)
+             }
+
+FileOpsResult ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the possible results of a file operation performed on a
+		 file.
+
+		- 'idle': No result indicated.
+
+		- 'queued': The operation has been configured and it is waiting to
+		   be executed.
+
+		- 'inProgress': Operation is being executed and a new result will be
+		   returned when it finishes.
+
+		- 'success': Operation was successful.
+
+		- 'fileNotFound' : The file that was suposed to be the object of the
+		   operation was not found.
+
+		- 'deviceNotFound' : The device specified in the operation was not found.
+
+		- 'accessDenied' : No permission to execute the requested action.
+
+		- 'readOnly' : Could not write to the destination device.
+
+		- 'notSupported' : The specified action is not supported for the
+		   requested file.
+
+		- 'deviceFull' : The destination device has not enough free space.
+
+		- 'entryExists' : An attempt was made to create a file with a name
+		   already is use by another entry.
+
+		- 'dirNotEmpty' : An attempt was made to remove a directory which is
+		   not empty.
+
+		- 'mediaIO' : A physical error occurred in the device media."
+
+
+    SYNTAX            INTEGER {
+						  idle (0),
+						  queued (1),
+						  inProgress (2),
+                          success (3),
+                          fileNotFound (4),
+                          deviceNotFound (5),
+                          accessDenied (6),
+                          readOnly (7),
+                          notSupported (8),
+                          internalError (9),
+                          deviceFull (10),
+                          entryExists (11),
+                          dirNotEmpty (12),
+                          mediaIO (13)
+                      }
+
+END

@@ -1,0 +1,297 @@
+ATSL-CONFIG-FILES-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Configurations File Management.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter64               FROM SNMPv2-SMI
+    DisplayString, RowStatus                              FROM SNMPv2-TC
+    TableIndex                                            FROM ATSL-MIB
+	fileClasses, FileAction, FileOpsResult                FROM ATSL-FILEMGR-MIB;
+
+configFiles MODULE-IDENTITY
+    LAST-UPDATED "201404280000Z" -- 28 April, 2014
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+
+    DESCRIPTION
+        "This MIB module provides resources for browsing and executing basic
+		  file management operations on Configuration files.  These files
+		  contain the complete configuration settings of a test unit.  For
+		  each configurable item of the application, a value is stored in
+		  the file.  The format of the configuration files is proprietary
+		  and is meant to be read by the test unit itself, or by other test
+		  units of the same model.  Configuration files can be deleted,
+		  renamed, imported and exported, saved to file, and loaded into the
+		  unit."
+
+    REVISION     "201404280000Z" -- 28 April, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { fileClasses 1 }
+
+--
+--  Table of Configuration files (listing)
+--
+
+configFilesListTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF ConfigFilesListEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table lists all configuration files present in the test unit
+		 or in any removable device attached to the unit.  Each row of the
+		 table represents a different file."
+
+    ::= { configFiles 1 }
+
+configFilesListEntry OBJECT-TYPE
+    SYNTAX            ConfigFilesListEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information for each configuration file
+		 stored in the test unit or in a removable storage unit attached to
+		 it."
+
+    INDEX { configFilesListIndex }
+    ::= { configFilesListTable 1 }
+
+ConfigFilesListEntry ::= SEQUENCE {
+    configFilesListIndex          TableIndex,
+    configFilesListName           DisplayString,
+    configFilesListDevice         DisplayString,
+    configFilesListCreationDate   DisplayString,
+    configFilesListSize           Counter64,
+    configFilesListURL            DisplayString,
+    configFilesListStatus         RowStatus
+}
+
+configFilesListIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each file in the unit,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { configFilesListEntry 1 }
+
+configFilesListName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the file as it appears in the test unit's filesystem,
+		 relative to the directory it is contained in. The name of the file
+		  must be used as a reference for subsequent operation on this file."
+
+    ::= { configFilesListEntry 2 }
+
+configFilesListDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the device the file resides in. The device name is
+		determined by the architecture of the managed unit and it must be
+		used as a reference for subsequent operation on this file so that a
+		file is uniquely referenced."
+
+    ::= { configFilesListEntry 3 }
+
+configFilesListCreationDate OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the creation time of the file"
+    ::= { configFilesListEntry 4 }
+
+configFilesListSize OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the size of the file in bytes."
+    ::= { configFilesListEntry 5 }
+
+configFilesListURL OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the download URL of this file. An external application
+		 can download this file via HTTP using the URL specified in this column.
+		 Note, however, that this URL must be prefixed with the protocol and
+		 host name or IP address of the managed unit, for example, if the
+		 URL listed in this OID is 'somedir/somefile.txt', the actual URL
+		 would look like 'http://192.168.1.1/somedir/somefile.txt', where
+		 192.168.1.1 is the IP address of the managed unit.
+		"
+    ::= { configFilesListEntry 6 }
+
+configFilesListStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'configFilesListTable'. As this is a read-only
+		 table, the only value supported is 'active'."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { configFilesListEntry 7 }
+
+--
+--  Table of operations on Configuration files 
+--
+
+configFilesOpsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF ConfigFilesOpsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table is the interface provided to perform operations on
+	    configuration files.  A client wishing to do an operation on a
+	    particular file should first look up the file in the
+	    configFilesListTable.  
+
+	    Then, a new row must be created in this table and set the FileName
+	    and Device cells to the file name and device name of the file that
+	    should get the action, as they appear in the ListTable. An Action
+	    must be set as well, which indicates which operation must be done
+	    on the specified file.
+
+	    If necessary, the Arg cell must be set if the operation requires an
+	    argument, such as the new file name when renaming files.
+
+	    Then, the client must trigger the file operation by setting the
+	    RowStatus cell to 'active'.  The status of the action will be
+	    reported in the Result cell.  Finally, the client must remove the
+	    row from the table by setting the RowStatus cell to 'destroy'.
+
+		The client is responsible for removing the unused table rows,
+		otherwise the maximum number of rows would be eventually reached,
+		preventing the creation of new rows."
+
+    ::= { configFiles 2 }
+
+configFilesOpsEntry OBJECT-TYPE
+    SYNTAX            ConfigFilesOpsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information on a file operation
+		 requested by any client."
+
+    INDEX { configFilesOpsIndex }
+    ::= { configFilesOpsTable 1 }
+
+ConfigFilesOpsEntry ::= SEQUENCE {
+    configFilesOpsIndex          TableIndex,
+    configFilesOpsFileName       DisplayString,
+    configFilesOpsDevice         DisplayString,
+    configFilesOpsArgs           DisplayString,
+    configFilesOpsAction         FileAction,
+    configFilesOpsResult         FileOpsResult,
+    configFilesOpsStatus         RowStatus
+}
+
+configFilesOpsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each different operation
+		that takes place simultaneously.  Index values must start at 1 but
+		can be re-used as finished operations are flushed from the table.  A
+		client that wants to request a new file operation would typically
+		try index 1, if it is present in the table, it would try index 2,
+		and so on, until a free index is found."
+
+    ::= { configFilesOpsEntry 1 }
+
+configFilesOpsFileName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the file that will be the object of the operation. It
+		must be the same name as it appears in the ListTable."
+
+    ::= { configFilesOpsEntry 2 }
+
+configFilesOpsDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the device where the file that will be the object of
+		the operation is stored.  It must be the same device as it appears in the
+		ListTable."
+
+    ::= { configFilesOpsEntry 3 }
+
+configFilesOpsArgs OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "An optional argument required by the operation. For example, the
+		new file name when a file is renamed."
+
+    ::= { configFilesOpsEntry 4 }
+
+configFilesOpsAction OBJECT-TYPE
+    SYNTAX            FileAction
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The operation to be performed on the specified file. Setting this
+		 cell to a non-idle action triggers the operation.  The supported
+		 actions are: 'delete', 'rename', 'import' and 'export'.
+		"
+
+    ::= { configFilesOpsEntry 5 }
+
+configFilesOpsResult OBJECT-TYPE
+    SYNTAX            FileOpsResult
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This cell indicates the result of the operation after it is
+		triggered by the Action cell."
+
+    ::= { configFilesOpsEntry 6 }
+
+configFilesOpsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'configFilesOpsTable'. Enables dynamic
+         creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCEd documents to get more
+         information about the ancoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { configFilesOpsEntry 7 }
+
+END

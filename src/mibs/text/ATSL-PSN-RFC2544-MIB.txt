@@ -1,0 +1,1448 @@
+ATSL-PSN-RFC2544-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for RFC2544 test.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32,Counter64          FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus, TEXTUAL-CONVENTION    FROM SNMPv2-TC
+    atslGeneral, TableIndex, RatioPercentage, Real32, UInt64    FROM ATSL-MIB;
+
+rfc2544 MODULE-IDENTITY
+    LAST-UPDATED "202202180000Z" -- 18 February, 2022
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+            "Francisco J. Hens
+             fhr@albedotelecom.com
+
+             Tel: +34 932 212 873
+             Fax: +34 932 210 924
+
+             ALBEDO Telecom SL
+             C/ Joan d'Austria 112;
+             08018 Barcelona - Spain"
+    DESCRIPTION
+    "This MIB defines basic tools required to run a RFC2544 test in
+     Albedo SNMP agents supporting this kind of test. The MIB is
+     oriented to configure the tests themselves and not the interfaces
+     where the tests are to be run.
+
+     RFC 2544 defines a number of tests that can be used to describe the
+     performance characteristics of a network interconnect devices.The
+     RFC 2544 test offers a variety of diagnosis, such as:
+      - Throughput: Measures the maximum rate at which none of the
+        offered    frames are dropped on the device.
+      - Back-to-back: Measures the buffering capacity of a device.
+      - Frame loss: Measures the performance of a network device in an
+        overloaded state.
+      - Latency: Measures the round-trip time taken by a test frame to
+        travel through a network device or across the network and back to
+        the test port.
+      - System Recovery: Measures the node speed at which the DUT / SUT
+        recovers from an overload condition.
+
+     This MIB does not cover the previous configuration required to run the
+     RFC2544 test.  Other MIBs are needed to do these operations.
+
+     This MIB module is made up of several scalars and configuration /
+     status / results tables. The current MIB module provides support for
+     the following components:
+
+        Scalars
+
+      - 'rfc2544Run': Starts / Stops all currently configured rfc2544 tests
+        in all instances in the managed entity.  The number of monitoring
+        instances may not be the same in different managed entities.  Some
+        agents may have one single test instance while others may support
+        several simultaneousinstances.  The instance number may also depend
+        on how the managed entity is configured.
+
+         Tables
+
+      - 'rfc2544SettingsTable': The RFC 2544 describes out-of-service tests,
+        which means that real traffic must be stopped and the tester will
+        generate specific frames to evaluate throughput, latency, frame loss
+        rate, burst tolerance, overload conditions and recovery.  This table
+        configures parameters required for each diagnosis, run the test in
+        the managed entity and defines RFC 2544 objectives.
+
+      - 'rfc2544StageTable': Reports the RFC2544 test stage in the unit.
+
+      - 'rfc2544ResultsThroughputTable': Reports the detailed throughput
+        test results.  The throughput test is to determine the maximum
+        number of frames per second that the device can process and forward
+        without dropping or losing any.  Each row of the table represents
+        the test frame length.  The Throughput test can be evaluated as pass
+        or fail, depending on the configured throughput thresholds
+        configured.
+
+      - 'rfc2544ResultsLatencyTable: Reports the detailed latency test
+        results.  Each row of the table represents the test frame length.
+        The latency test can be evaluated as pass or fail depending on the
+        thresholds configured.  This test determines the intrinsic latency
+        of the DUT / SUT.  In order to determine the latency you usually
+        first measure the throughput for the DUT / SUT at each of the
+        defined frame sizes, and send a stream of frames through the DUT /
+        SUT at the determined throughput rate to a specific destination.  If
+        you do not measure throughput, the latency will be measured at the
+        nominal capacity for the transmission medium.
+
+      - 'rfc2544ResultsFrameLossTable': Reports the detailed frame loss test
+        results.  The aim of this test is to determine the frame loss ratio
+        through the entire range of input data rates and frame sizes.  For
+        this reason, the result tables depend on frame length and Throughput
+        (%).  Throughput (%) is previously measured as the maximum
+        attainable bit rate expressed as a percentage of the nominal
+        interface rate (10 Mb/s, 100 Mb/s, 1000 Mb/s, 10 Gb/s) or a
+        different value depending on the particular test settings.  The
+        frame loss test can be evaluated as pass or fail depending on the
+        configured thresholds.
+
+      - 'rfc2544ResultsBacktoBack': Reports the detailed back-to-back test
+        result.s A back-to-back frames test determines the node buffer
+        capacity by sending bursts of traffic at the highest theoretical
+        rate, and then measuring the longest burst where no packets are
+        dropped.  The test can be evaluated as pass or fail depending on the
+        configured thresholds.
+
+      - 'rfc2544ResultsRecoveryTable': This test determines the node speed
+        at which the DUT / SUT recovers from an overload condition.  Each
+        row of the table corresponds to a tested frame size.  There should
+        be columns for the frame size, the frame rate used as the throughput
+        rate for each type of data stream tested, and for the measured
+        recovery time for each type of data stream tested.  The test can be
+        evaluated as pass or fail depending on the configuired thresholds."
+
+    REVISION     "202202180000Z" -- 18 Febrery, 2022
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 34 }
+
+
+LabelStatus ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Test status indication"
+    SYNTAX          INTEGER {
+                            noTest              (0),
+                            inProgress          (1),
+                            pass                (2),
+                            fail                (3),
+                            error               (4),
+                            abort               (5),
+                            noLink              (6),
+                            noTraffic           (7)}
+
+Stage ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Test status indication"
+    SYNTAX          INTEGER {
+                            idle                (0),
+                            connecting          (1),
+                            testingLink         (2),
+                            running             (3),
+                            throughputTest      (4),
+                            latencyTest         (5),
+                            frameLossTest       (6),
+                            backToBackTest      (7),
+                            systemRecoveryTest  (8)}
+------------------------------------------------------------------------
+-- Top level module structure
+------------------------------------------------------------------------
+
+rfc2544Control  OBJECT IDENTIFIER ::= { rfc2544 1 }
+
+------------------------------------------------------------------------
+-- Global rfc2544 test enable / disable control group
+------------------------------------------------------------------------
+
+rfc2544Run OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts - Stops all currently configured rfc2544 tests in all
+        instances in the managed entity. The number of monitoring
+        instances may not be the same in different managed entities.
+        Some agents may have one single rfc2544 test instance while
+        others may support several simultaneous instances. The instance
+        number may also depend on how the managed entity is configured."
+    ::= { rfc2544Control 1 }
+
+------------------------------------------------------------------------
+-- RFC2544 Settings
+------------------------------------------------------------------------
+
+rfc2544SettingsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544SettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The settings table objectives are:
+        - Define specific configuration of the RFC 2544 throughput, latency,
+          frame loss, back-to-back frames and system recovery time tests.
+        - Configure the test frame sizes.
+        - Define pass or fail thresholds for the throughput, latency,
+          frame loss, back-to-back frames and system recovery tests
+        - Run the RCF2544 test."
+    ::= { rfc2544 2 }
+
+rfc2544SettingsEntry OBJECT-TYPE
+    SYNTAX            Rfc2544SettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of
+        the available rfc2544 instances."
+    INDEX { rfc2544SettingsInstance }
+    ::= { rfc2544SettingsTable 1 }
+
+Rfc2544SettingsEntry ::= SEQUENCE {
+    rfc2544SettingsInstance                 TableIndex,
+    rfc2544SettingsName                     DisplayString,
+    rfc2544SettingsEnable                   TruthValue,
+    rfc2544SettingsObjectiveMinThroughput   RatioPercentage,
+    rfc2544SettingsObjectiveMaxLatency      Real32,
+    rfc2544SettingsObjectiveMaxFrameLoss    RatioPercentage,
+    rfc2544SettingsObjectiveMinFrameBurst   Unsigned32,
+    rfc2544SettingsObjectiveMaxRecovery     Real32,
+    rfc2544SettingsFrameSizes               Unsigned32,
+    rfc2544SettingsUserFrameSizes           Unsigned32,
+    rfc2544SettingsThroughputEnable         TruthValue,
+    rfc2544SettingsThroughputMaxRate        RatioPercentage,
+    rfc2544SettingsThroughputResolution     RatioPercentage,
+    rfc2544SettingsThroughputTrialDuration  Unsigned32,
+    rfc2544SettingsThroughputMaxFrameLoss   RatioPercentage,
+    rfc2544SettingsLatencyEnable            TruthValue,
+    rfc2544SettingsLatencyRate              RatioPercentage,
+    rfc2544SettingsLatencyIterations        Unsigned32,
+    rfc2544SettingsLatencyTrialDuration     Unsigned32,
+    rfc2544SettingsLatencyStatistic         INTEGER,
+    rfc2544SettingsFrameLossEnable          TruthValue,
+    rfc2544SettingsFrameLossMaxRate         RatioPercentage,
+    rfc2544SettingsFrameLossResolution      RatioPercentage,
+    rfc2544SettingsFrameLossTrialDuration   Unsigned32,
+    rfc2544SettingsBackToBackEnable         TruthValue,
+    rfc2544SettingsBackToBackMaxBurst       Unsigned32,
+    rfc2544SettingsBackToBackResolution     Unsigned32,
+    rfc2544SettingsBackToBackIterations     Unsigned32,
+    rfc2544SettingsRecoveryEnable           TruthValue,
+    rfc2544SettingsRecoveryTrialDuration    Unsigned32,
+    rfc2544SettingsRecoveryIterations       Unsigned32,
+    rfc2544SettingsDurationMin              Unsigned32,
+    rfc2544SettingsDurationMax              Unsigned32,
+    rfc2544SettingsRowStatus                RowStatus
+}
+
+rfc2544SettingsInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each rfc2544 instance.
+        It is recommended that values are assigned contiguously starting
+        from 1. The value for each block index must remain constant
+        at least from one re-initialization of the entity network
+        management to the next re-initialization."
+    ::= { rfc2544SettingsEntry 1 }
+
+rfc2544SettingsName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        eth0.0 or just anything describing the instance such as eth0-rfc2544.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544SettingsEntry 2 }
+
+rfc2544SettingsEnable  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the RFC2544 test. This OID does not actually runs
+        the test. It just selects the test to be run once the -rfc2544Run-
+        is set to -true-. It enables the controlling entity to configure the
+        settings provided for this test."
+    ::= { rfc2544SettingsEntry 3 }
+
+rfc2544SettingsObjectiveMinThroughput OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Percentage value that defines the level of acceptable quality for the
+        user regarding throughput test. The test will be considered to fail if
+        the measured throughput is smaller that the threshold and it will be
+        passed otherwise."
+    ::= { rfc2544SettingsEntry 4 }
+
+rfc2544SettingsObjectiveMaxLatency OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ms"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets a performance objective for the RFC 2544 latency test.
+        The test is considered to fail if the result is larger than the
+        threshold and it is considered to pass otherwise."
+    ::= { rfc2544SettingsEntry 5 }
+
+rfc2544SettingsObjectiveMaxFrameLoss OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures an performance objective for the RFC 2544
+        frame loss test. The test is considered to fail if there is at
+        least one result within the frame length and bit rate ranges
+        which produces a frame loss figure larger than the threshold.
+        The test is considered to pass otherwise."
+    ::= { rfc2544SettingsEntry 6 }
+
+rfc2544SettingsObjectiveMinFrameBurst OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "fr"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets a performance objective for the RFC 2544 back-to-back
+        frames test. The test is considered to fail if the back-to-back
+        frames result is smaller than the configured threshold and it
+        is considered to pass otherwise."
+    ::= { rfc2544SettingsEntry 7 }
+
+rfc2544SettingsObjectiveMaxRecovery OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ms"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the performance objective for the RFC 2544 system
+        recovery time test. The test fails if the system recovery time
+        result is longer than the threshold and passes otherwise.."
+    ::= { rfc2544SettingsEntry 8 }
+
+rfc2544SettingsFrameSizes OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configure the test frame sizes. The available frame sizes are:
+        64, 128, 256, 512, 1024, 1280, 1518 and User-defined. This value
+        is a mask defined as:
+
+        Size             Active Bit
+        64                  0           (1<<0)
+        128                 1           (1<<1)
+        256                 2           (1<<2)
+        512                 3           (1<<3)
+        1024                4           (1<<4)
+        1280                5           (1<<5)
+        1514                6           (1<<6)
+        User-defined        7           (1<<7)
+
+        In order to read-write you have the decimal value according with
+        the mask"
+    ::= { rfc2544SettingsEntry 9 }
+
+rfc2544SettingsUserFrameSizes OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The User-defined value must be between 64 and 10000 bytes."
+    ::= { rfc2544SettingsEntry 10 }
+
+rfc2544SettingsThroughputEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the RFC 2544 throughput test. The Latency
+        and System recovery tests depend on the throughput results and
+        they are disabled if the throughput test is also disabled."
+    ::= { rfc2544SettingsEntry 11 }
+
+rfc2544SettingsThroughputMaxRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "It is the maximum bit rate the DUT / SUT supports due policing
+        or other bandwidth limiting mechanisms. The Maximum rate (%)
+        constitutes the upper level of the throughput result.
+        The Maximum rate (%) is configured as a percentage of the
+        nominal transmission rate configured through link auto-negotiation
+        or fixed by the network administrators.
+        If the DUT / SUT is not using bandwidth limiting mechanisms
+        or the maximum rate is unknown, configure this field to
+        100 %. Test results should not change but it will take more
+        time to get the same results with the same accuracy level."
+    ::= { rfc2544SettingsEntry 12 }
+
+rfc2544SettingsThroughputResolution OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Minimum throughput, expressed as a percentage of the nominal
+        channel capacity, that can be distinguished by the
+        RFC 2544 throughput algorithm. This algorithm finishes
+        when the distance between the real throughput and the value
+        estimated by the algorithm is smaller than the resolution.
+        Configuring an smaller value of the resolution increases
+        measurement accuracy but also increases the time needed
+        to finish the throughput test."
+    ::= { rfc2544SettingsEntry 13 }
+
+rfc2544SettingsThroughputTrialDuration  OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "s"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This value corresponds with the duration of a single throughput
+        trial test expressed in seconds. The value must be between 4
+        and 127 seconds. Each algorithm test cycle contains one trial.
+        The equipment transmits test traffic during
+        the time specified by this setting before deciding by means
+        the analysis of the number of lost frames whether to continue
+        or not.
+        Some equipments may need some time before they start
+        dropping frames. If the trial duration is too short this may
+        cause the estimated throughput to be larger than it will in
+        stationary transmission conditions."
+    ::= { rfc2544SettingsEntry 14 }
+
+rfc2544SettingsThroughputMaxFrameLoss OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The equipment decides whether it is operating above or
+        below the actual DUT / SUT throughput by comparing the
+        number of transmitted and received frames. It decides that
+        the current transmission rate is higher than the real throughput
+        if the frame loss ratio is larger than the Max.frame loss
+        (%) configured here. In the same way, the tester decides that
+        the current test rate is smaller than the actual throughput if
+        the computed frame loss ratio is smaller than the Max. frame
+        loss (%)."
+    ::= { rfc2544SettingsEntry 15 }
+
+rfc2544SettingsLatencyEnable  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the RFC 2544 latency test. The latency
+        test will not be executed if is not previously enabled by this
+        control."
+    ::= { rfc2544SettingsEntry 16 }
+
+rfc2544SettingsLatencyRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "In order to determine the latency you usually first measure the
+        throughput for the DUT / SUT at each of the defined frame sizes,
+        and send a stream of frames through the DUT / SUT at the determined
+        throughput rate to a specific destination."
+    ::= { rfc2544SettingsEntry 17 }
+
+rfc2544SettingsLatencyIterations OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This parameter corresponds with the number of times the latency
+        is measured for every frame size."
+    ::= { rfc2544SettingsEntry 18 }
+
+rfc2544SettingsLatencyTrialDuration OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This value corresponds with the duration of a single latency
+        trial test expressed in seconds. The value must be between 4
+        and 127 seconds.
+        For each frame size, the RFC 2544 algorithm measures the
+        latency several times. This parameter configures the duration
+        of each latency measurement."
+    ::= { rfc2544SettingsEntry 19 }
+
+rfc2544SettingsLatencyStatistic  OBJECT-TYPE
+    SYNTAX            INTEGER {
+                        average (0),
+                        maximun (1),
+                        minimum (2)}
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "For each frame size the latency is measured a number of times,
+        defined in rfc2544SettingsLatencyIterations. The way in which
+        these iterations are managed can act on the result.The options are:
+        - Average: the results of all iterations are averaged for each
+        frame size.
+        - Maximum: the maximum value obtained in the iterations is
+        chosen for each frame size.
+        - Minimum: the minimum value obtained in the iterations is
+        chosen for each frame size."
+    ::= { rfc2544SettingsEntry 20 }
+
+rfc2544SettingsFrameLossEnable  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the RFC 2544 frame loss test. The frame
+        loss test will not be executed if is not previously enabled by
+        this control."
+    ::= { rfc2544SettingsEntry 21 }
+
+rfc2544SettingsFrameLossMaxRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Throughput value at which the frame loss test begins"
+    ::= { rfc2544SettingsEntry 22 }
+
+rfc2544SettingsFrameLossResolution OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Measures the decrease in terms of bit rate the tester uses to
+        measure frame loss expressed as a percentage of the nominal
+        transmission capacity. For example if throughput result is
+        100% for one specific frame size and this field is set to 10%,
+        then frame loss will be evaluated for 100%, 90%, 80%... of
+        the transmission medium capacity. If frame loss is configured
+        to 1%, the bit rates used in consecutive trials will be 100%,
+        99%, 98%...
+        Setting an smaller Resolution (%) increases frame loss test
+        accuracy but the tame it takes to finish the test is also
+        increased."
+    ::= { rfc2544SettingsEntry 23 }
+
+rfc2544SettingsFrameLossTrialDuration  OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This value corresponds with the duration of a single frame
+        loss trial test expressed in seconds. The value must be
+        between 4 and 127 seconds.For each configured
+        frame size and load, the equipment sends and analyses traffic
+        for a time period specified by this field.
+        Longer trial duration periods tend to give more accurate
+        frame loss results but they make measurements longer."
+    ::= { rfc2544SettingsEntry 24 }
+
+rfc2544SettingsBackToBackEnable  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the RFC 2544 back-to-back frames test.
+        The back-to-back frames test will not be executed if is not
+        previously enabled by this control."
+    ::= { rfc2544SettingsEntry 25 }
+
+rfc2544SettingsBackToBackMaxBurst OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "fr"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the maximum frame burst to be used in an back-toback
+        frames test trial. The DUT / SUT should drop some
+        frames when it receives a burst with the length configured in
+        this field. If the actual back-to-back frames result is larger
+        than the Maximum burst length (fr.), the equipment will be
+        unable to find it."
+    ::= { rfc2544SettingsEntry 26 }
+
+rfc2544SettingsBackToBackResolution  OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "fr"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "It is the minimum back-to-back frames result the equipment
+        distinguishes as different results. When a test cycle finishes,
+        the measurement algorithm compares the burst length with
+        the result of the previous cycle. If the difference between
+        them is smaller than the resolution, then the algorithm terminates.
+        The final back-to-back result is the one computed in the last cycle."
+    ::= { rfc2544SettingsEntry 27 }
+
+rfc2544SettingsBackToBackIterations OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the number of bursts sent per test cycle. Increasing
+        iterations makes the back-to-back test result more reliable
+        but it also increases the overall testing time."
+    ::= { rfc2544SettingsEntry 28 }
+
+rfc2544SettingsRecoveryEnable      OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the RFC 2544 system recovery test. The
+        system recovery test will not be executed if is not previously
+        enabled by this control.."
+    ::= { rfc2544SettingsEntry 29 }
+
+rfc2544SettingsRecoveryTrialDuration  OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Time, computed in seconds, the DUT / SUT is overloaded by
+        frame transmission above the recorded throughput value.
+        The value must be between 4 and 127 seconds."
+    ::= { rfc2544SettingsEntry 30 }
+
+rfc2544SettingsRecoveryIterations    OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Number of times the recovery time is measured in one test
+        cycle. The final value of the recovery time will be the averaged
+        value computed for each iterations.
+        The more iterations per test cycle the more reliable the test
+        results are. However, increasing the iterations increases the
+        total testing time as well."
+    ::= { rfc2544SettingsEntry 31 }
+
+rfc2544SettingsDurationMin  OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum time in seconds that the test will last. Time depends
+        configurations of throughput, latency, frame loss, back-to-back,
+        frames and system recovery."
+    ::= { rfc2544SettingsEntry 32 }
+
+rfc2544SettingsDurationMax   OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum time in seconds that the test will last. Time depends
+        configurations of throughput, latency, frame loss, back-to-back,
+        frames and system recovery."
+    ::= { rfc2544SettingsEntry 33 }
+
+rfc2544SettingsRowStatus  OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544Settings'. Enables
+        dynamic creation / deletion of table entries in the current table.
+        Information contained in the table entry may not be available for
+        read / write operations if the status column is set to something
+        different to 'active'. See the REFERENCE documents to get more
+        information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { rfc2544SettingsEntry 34 }
+
+------------------------------------------------------------------------
+-- RFC2544 Stage
+------------------------------------------------------------------------
+
+rfc2544StageTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544StageEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Once the test has been configured, it can be started at any time.
+        You can wait to the test to finish but it is also possible to check
+        partial test results at any moment. This table reports rfc2544 test
+        stage in the managed entite"
+    ::= { rfc2544 3}
+
+rfc2544StageEntry OBJECT-TYPE
+    SYNTAX            Rfc2544StageEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available RFC 2544 instances."
+    INDEX { rfc2544StageInstance }
+    ::= { rfc2544StageTable 1 }
+
+Rfc2544StageEntry ::= SEQUENCE {
+    rfc2544StageInstance           TableIndex,
+    rfc2544StageName               DisplayString,
+    rfc2544StageStatus             LabelStatus,
+    rfc2544StageCurrentStage       Stage,
+    rfc2544StageCompleted          RatioPercentage,
+    rfc2544StageMaxLinkRate        Unsigned32,
+    rfc2544StageThroughputTest     LabelStatus,
+    rfc2544StageLatencyTest        LabelStatus,
+    rfc2544StageFrameLossTest      LabelStatus,
+    rfc2544StageBacktoBackTest     LabelStatus,
+    rfc2544StageRecoveryTest       LabelStatus,
+    rfc2544StageRowStatus          RowStatus
+}
+
+rfc2544StageInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each RFC 2544 test
+        instance. It is recommended that values are assigned contiguously
+        starting from 1. The value for each block index must remain constant
+        at least from one re-initialization of the entity's network
+        management to the next re-initialization."
+    ::= { rfc2544StageEntry 1 }
+
+rfc2544StageName  OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544StageEntry 2 }
+
+rfc2544StageStatus  OBJECT-TYPE
+    SYNTAX            LabelStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The global Pass / Fail indication. The test is Pass if all configured
+        tests pass, if one test fail is fails globally. "
+    ::= { rfc2544StageEntry 3 }
+
+rfc2544StageCurrentStage  OBJECT-TYPE
+    SYNTAX            Stage
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the entity manager state goes through during the test"
+    ::= { rfc2544StageEntry 4 }
+
+rfc2544StageCompleted OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Status test indication in percentage valeu. 100% indicates that the
+        test is finished"
+    ::= { rfc2544StageEntry 5 }
+
+rfc2544StageMaxLinkRate OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "Mb/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximun Link Rate Value achieved in the test."
+    ::= { rfc2544StageEntry 6 }
+
+rfc2544StageThroughputTest OBJECT-TYPE
+    SYNTAX            LabelStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The Throughput test Pass / Fail indication. The test is Pass
+        if all frame lengths test pass, if one test fail is fails globally."
+    ::= { rfc2544StageEntry 7 }
+
+rfc2544StageLatencyTest  OBJECT-TYPE
+    SYNTAX            LabelStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The Latency test Pass / Fail indication. The test is Pass
+        if all frame lengths test pass, if one test fail is fails globally."
+    ::= { rfc2544StageEntry 8 }
+
+rfc2544StageFrameLossTest  OBJECT-TYPE
+    SYNTAX            LabelStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The Frame Loss test Pass / Fail indication. The test is Pass
+        if all frame lengths test pass, if one test fail is fails globally."
+    ::= { rfc2544StageEntry 9 }
+
+rfc2544StageBacktoBackTest OBJECT-TYPE
+    SYNTAX            LabelStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The Back to Back test Pass / Fail indication. The test is Pass
+        if all frame lengths test pass, if one test fail is fails globally."
+    ::= { rfc2544StageEntry 10 }
+
+rfc2544StageRecoveryTest OBJECT-TYPE
+    SYNTAX            LabelStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The System Recovery test Pass / Fail indication. The test is Pass
+        if all frame lengths test pass, if one test fail is fails globally."
+    ::= { rfc2544StageEntry 11}
+
+rfc2544StageRowStatus   OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544Stage'. Enables
+        dynamic creation / deletion of table entries in the current table.
+        Information contained in the table entry may not be available for
+        read / write operations if the status column is set to something
+        different to 'active'. See the REFERENCE documents to get more
+        information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { rfc2544StageEntry 12}
+
+------------------------------------------------------------------------
+--RFC2544 results throughput test
+------------------------------------------------------------------------
+
+rfc2544ResultsThroughputTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544ResultsThroughputEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports Throughput test results in the managed entity. Each row in the
+        table represents the test frame length and columns are test results
+        throughput."
+    ::= { rfc2544 4}
+
+rfc2544ResultsThroughputEntry OBJECT-TYPE
+    SYNTAX            Rfc2544ResultsThroughputEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of
+        the available RFC 2544 instances."
+    INDEX { rfc2544ResultsThroughputIndex, rfc2544ResultsThroughputFrameSize }
+    ::= { rfc2544ResultsThroughputTable 1 }
+
+Rfc2544ResultsThroughputEntry ::= SEQUENCE {
+    rfc2544ResultsThroughputIndex               TableIndex,
+    rfc2544ResultsThroughputFrameSize           TableIndex,
+    rfc2544ResultsThroughputName                   DisplayString,
+    rfc2544ResultsThroughputTheorMax            Unsigned32,
+    rfc2544ResultsThroughputMaxRate             Unsigned32,
+    rfc2544ResultsThroughputMaxRatePercentage   RatioPercentage,
+    rfc2544ResultsThroughputMaxRateETH          Counter64,
+    rfc2544ResultsThroughputMaxRatePHY          Counter64,
+    rfc2544ResultsThroughputFail                TruthValue,
+    rfc2544ResultsThroughputRowStatus           RowStatus
+}
+
+rfc2544ResultsThroughputIndex   OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each RFC 2544 test
+        instance. It is recommended that values are assigned contiguously
+        starting from 1. The value for each block index must remain constant
+        at least from one re-initialization of the entity's network
+        management to the next re-initialization."
+    ::= { rfc2544ResultsThroughputEntry 1 }
+
+rfc2544ResultsThroughputFrameSize    OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate the frame sizes  computed from a single instance.
+        Possible frame sizes are defined in 'rfc2544SettingsFrameSizes'."
+    ::= { rfc2544ResultsThroughputEntry 2 }
+
+rfc2544ResultsThroughputName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544ResultsThroughputEntry 3 }
+
+rfc2544ResultsThroughputTheorMax OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "fr/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Theoretical maximum rate attainable in the transmission
+        medium expressed in frames per second. In an Ethernet link,
+        this rate is calculated as nominal transmission capacity in bits
+        per second (10 Mb/s, 100 Mb/s, 1000 Mb/s, 10 Gb/s) divided
+        by the frame bits (including the 64-bit preamble and the 96-
+        bit interframe gap)."
+    ::= { rfc2544ResultsThroughputEntry 4 }
+
+rfc2544ResultsThroughputMaxRate  OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "fr/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Measured maximum rate attainable in the transmission
+        medium expressed in frames per second. This result is
+        always smaller or equal than the theoretical maximum rate
+        result."
+    ::= { rfc2544ResultsThroughputEntry 5 }
+
+rfc2544ResultsThroughputMaxRatePercentage  OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Measured maximum rate attainable in the transmission
+        medium expressed in percentage value respect the theoretical
+        maximum rate result."
+    ::= { rfc2544ResultsThroughputEntry 6 }
+
+rfc2544ResultsThroughputMaxRateETH  OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "b/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Measured maximum rate attainable in the transmission
+        medium respect to the Ethernet Frame without Bit Sequence and
+        Interpacket GAP fields."
+    ::= { rfc2544ResultsThroughputEntry 7 }
+
+rfc2544ResultsThroughputMaxRatePHY  OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "b/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Measured maximum rate attainable in the transmission
+        medium respect to the Ethernet Frame taking into account Bit
+        Sequence and Interpacket GAP fields."
+    ::= { rfc2544ResultsThroughputEntry 8 }
+
+rfc2544ResultsThroughputFail  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reports if the frame size pass or fail the throughput test. The
+        truth value indicate fail and the false value indicate pass"
+    ::= { rfc2544ResultsThroughputEntry 9 }
+
+rfc2544ResultsThroughputRowStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544ResultsThroughput'. Enables
+        dynamic creation / deletion of table entries in the current table.
+        Information contained in the table entry may not be available for
+        read / write operations if the status column is set to something
+        different to 'active'. See the REFERENCE documents to get more
+        information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= {rfc2544ResultsThroughputEntry 10 }
+
+------------------------------------------------------------------------
+--RFC2544 results latency test
+------------------------------------------------------------------------
+
+rfc2544ResultsLatencyTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544ResultsLatencyEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports latency test results in the managed entity. Each row in the
+        table represents the test frame length and columns are test results
+        latency"
+    ::= { rfc2544 5}
+
+rfc2544ResultsLatencyEntry OBJECT-TYPE
+    SYNTAX            Rfc2544ResultsLatencyEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of
+        the available RFC2544 instances."
+    INDEX { rfc2544ResultsLatencyIndex, rfc2544ResultsLatencyFrameSize}
+    ::= { rfc2544ResultsLatencyTable 1 }
+
+Rfc2544ResultsLatencyEntry ::= SEQUENCE {
+    rfc2544ResultsLatencyIndex          TableIndex,
+    rfc2544ResultsLatencyFrameSize      TableIndex,
+    rfc2544ResultsLatencyName           DisplayString,
+    rfc2544ResultsLatencyThroughput     RatioPercentage,
+    rfc2544ResultsLatencyDelay          Counter64,
+    rfc2544ResultsLatencyDelayVar       Counter64,
+    rfc2544ResultsLatencyFail           TruthValue,
+    rfc2544ResultsLatencyRowStatus      RowStatus
+}
+
+rfc2544ResultsLatencyIndex   OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each RFC 2544 test
+        instance. It is recommended that values are assigned contiguously
+        starting from 1. The value for each block index must remain constant
+        at least from one re-initialization of the entity's network
+        management to the next re-initialization."
+    ::= { rfc2544ResultsLatencyEntry 1 }
+
+rfc2544ResultsLatencyFrameSize   OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate the frame sizes  computed from a single instance.
+        Possible frame sizes are defined in 'rfc2544SettingsFrameSizes'."
+    ::= { rfc2544ResultsLatencyEntry 2 }
+
+rfc2544ResultsLatencyName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544ResultsLatencyEntry 3 }
+
+rfc2544ResultsLatencyThroughput OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Throughput percentage value represents the bit rate used for testing
+        latency . It can be the previously measured maximum rate attainable
+        bit rate expressed as a percentage of the nominal interface rate
+        (10 Mb/s,100 Mb/s, 1000 Mb/s, 10 Gb/s) or a different value depending
+        on the particular test settings."
+    ::= { rfc2544ResultsLatencyEntry 4 }
+
+rfc2544ResultsLatencyDelay  OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Latency result measured in microseconds. The delay result
+        has to be understood as the one-way delay if the test is configured
+        as a One-way (A > B), Upstream or Downstream test
+        or as the round-trip delay if the test is configured as Two-way
+        (A > A). In many setups the round-trip delay is roughly twice
+        that the one-way delay but in asymmetric setups this is not
+        true anymore."
+    ::= { rfc2544ResultsLatencyEntry 5 }
+
+rfc2544ResultsLatencyDelayVar  OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Delay variation measured in microseconds. The delay variation
+        is computed as specified in IETF RFC 3393 and it is to
+        be understood as a one-way delay metric if the test is configured
+        as a One-way (A > B), Upstream or Downstream test or
+        as a two-way metric if the test method is Two-way (A > A). In
+        asymmetric tests this metric is also one-way and corresponds
+        to the upstream or downstream path depending on
+        the configure test method."
+    ::= { rfc2544ResultsLatencyEntry 6 }
+
+rfc2544ResultsLatencyFail  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reports if the frame size pass or fail the throughput test. The
+        truth value indicate fail and the false value indicate pass."
+    ::= { rfc2544ResultsLatencyEntry 7 }
+
+rfc2544ResultsLatencyRowStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544ResultsLatency'. Enables
+        dynamic creation / deletion of table entries in the current table.
+        Information contained in the table entry may not be available for
+        read / write operations if the status column is set to something
+        different to 'active'. See the REFERENCE documents to get more
+        information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { rfc2544ResultsLatencyEntry 8}
+
+------------------------------------------------------------------------
+--RFC2544 results frame loss test
+------------------------------------------------------------------------
+rfc2544ResultsFrameLossTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544ResultsFrameLossEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports frame loss test results in the managed entity. Frame
+        loss test results depend on the frame length and some of them also
+        on the throughput. For this reason, result tables depend on both
+        magnitudes Size and Throughput."
+    ::= { rfc2544 6}
+
+rfc2544ResultsFrameLossEntry OBJECT-TYPE
+    SYNTAX            Rfc2544ResultsFrameLossEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of
+        the available RFC2544 instances."
+    INDEX { rfc2544ResultsFrameLossIndex, rfc2544ResultsFrameLossSize, rfc2544ResultsFrameLossThroughput }
+    ::= { rfc2544ResultsFrameLossTable 1 }
+
+Rfc2544ResultsFrameLossEntry ::= SEQUENCE {
+    rfc2544ResultsFrameLossIndex                TableIndex,
+    rfc2544ResultsFrameLossSize                 TableIndex,
+    rfc2544ResultsFrameLossThroughput           Unsigned32,
+    rfc2544ResultsFrameLossName                 DisplayString,
+    rfc2544ResultsFrameLossValue                RatioPercentage,
+    rfc2544ResultsFrameLossFail                 TruthValue,
+    rfc2544ResultsFrameLossRowStatus            RowStatus
+}
+
+rfc2544ResultsFrameLossIndex   OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each RFC 2544 test
+        instance. The value for each block index must remain constant
+        at least from one re-initialization of the entity's network
+        management to the next re-initialization."
+    ::= { rfc2544ResultsFrameLossEntry 1 }
+
+rfc2544ResultsFrameLossSize   OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate the frame sizes  computed from a single instance.
+        Possible frame sizes are defined in 'rfc2544SettingsFrameSizes'."
+    ::= { rfc2544ResultsFrameLossEntry 2 }
+
+rfc2544ResultsFrameLossThroughput   OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate different Throughput test results computed
+        for an RFC 2544 test instance and frame length. The orginal value of
+        throughput is multiplicated by a factor of 100 to get this index."
+        ::= { rfc2544ResultsFrameLossEntry 3 }
+
+rfc2544ResultsFrameLossName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544ResultsFrameLossEntry 4 }
+
+rfc2544ResultsFrameLossValue   OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Frame loss result expressed as a percentage of the total
+        amount of frames transmitted in the trial for an specific frame
+        length and throughput."
+    ::= { rfc2544ResultsFrameLossEntry 5 }
+
+rfc2544ResultsFrameLossFail   OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reports if the frame size pass or fail the throughput test. The
+        truth value indicate fail and the false value indicate pass"
+    ::= { rfc2544ResultsFrameLossEntry 6 }
+
+rfc2544ResultsFrameLossRowStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544ResultsFrameLoss'. Enables
+         dynamic creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCE documents to get more
+         information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { rfc2544ResultsFrameLossEntry 7}
+
+------------------------------------------------------------------------
+--RFC2544 results Back-to-back test
+------------------------------------------------------------------------
+rfc2544ResultsBackToBackTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544ResultsBackToBackEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports BackToBack test results in the managed entity. Each row in the
+        table represents the test frame length and columns are test results
+        BackToBack."
+    ::= { rfc2544 7}
+
+rfc2544ResultsBackToBackEntry OBJECT-TYPE
+    SYNTAX            Rfc2544ResultsBackToBackEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of
+        the available RFC 2544 instances."
+    INDEX { rfc2544ResultsBackToBackIndex, rfc2544ResultsBackToBackFrameSize }
+    ::= { rfc2544ResultsBackToBackTable 1 }
+
+Rfc2544ResultsBackToBackEntry ::= SEQUENCE {
+    rfc2544ResultsBackToBackIndex           TableIndex,
+    rfc2544ResultsBackToBackFrameSize       TableIndex,
+    rfc2544ResultsBackToBackName            DisplayString,
+    rfc2544ResultsBackToBackBurst           Unsigned32,
+    rfc2544ResultsBackToBackFail            TruthValue,
+    rfc2544ResultsBackToBackRowStatus       RowStatus}
+
+rfc2544ResultsBackToBackIndex  OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each RFC 2544 test
+        instance. It is recommended that values are assigned contiguously
+        starting from 1. The value for each block index must remain constant
+        at least from one re-initialization of the entity's network
+        management to the next re-initialization."
+    ::= { rfc2544ResultsBackToBackEntry 1 }
+
+rfc2544ResultsBackToBackFrameSize  OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate the frame sizes  computed from a single instance.
+        Possible frame sizes are defined in 'rfc2544SettingsFrameSizes'."
+    ::= { rfc2544ResultsBackToBackEntry 2 }
+
+rfc2544ResultsBackToBackName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544ResultsBackToBackEntry 3 }
+
+rfc2544ResultsBackToBackBurst OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "fr"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Longest burst accepted by the DUT / SUT which produces
+        no packet loss."
+    ::= { rfc2544ResultsBackToBackEntry 4 }
+
+rfc2544ResultsBackToBackFail OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reports if the frame size pass or fail the throughput test. The
+        truth value indicate fail and the false value indicate pass."
+    ::= { rfc2544ResultsBackToBackEntry 5 }
+
+rfc2544ResultsBackToBackRowStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544ResultsBackToBack'. Enables
+        dynamic creation / deletion of table entries in the current table.
+        Information contained in the table entry may not be available for
+        read / write operations if the status column is set to something
+        different to 'active'. See the REFERENCE documents to get more
+        information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+::= { rfc2544ResultsBackToBackEntry 6}
+
+------------------------------------------------------------------------
+--RFC2544 results system recovery test
+------------------------------------------------------------------------
+rfc2544ResultsRecoveryTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF Rfc2544ResultsRecoveryEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports Recovery test results in the managed entity. Each row in the
+        table represents the test frame length and columns are test results
+        Recovery."
+    ::= { rfc2544 8}
+
+rfc2544ResultsRecoveryEntry OBJECT-TYPE
+    SYNTAX            Rfc2544ResultsRecoveryEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of
+        the available RFC 2544 instances."
+    INDEX { rfc2544ResultsRecoveryIndex, rfc2544ResultsRecoveryFrameSize}
+    ::= { rfc2544ResultsRecoveryTable 1 }
+
+Rfc2544ResultsRecoveryEntry ::= SEQUENCE {
+    rfc2544ResultsRecoveryIndex         TableIndex,
+    rfc2544ResultsRecoveryFrameSize     TableIndex,
+    rfc2544ResultsRecoveryName          DisplayString,
+    rfc2544ResultsRecoveryTestRate      RatioPercentage,
+    rfc2544ResultsRecoveryTime          Real32,
+    rfc2544ResultsRecoveryFail          TruthValue,
+    rfc2544ResultsRecoveryRowStatus     RowStatus
+}
+
+rfc2544ResultsRecoveryIndex   OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each RFC 2544 test
+        instance. It is recommended that values are assigned contiguously
+        starting from 1. The value for each block index must remain constant
+        at least from one re-initialization of the entity's network
+        management to the next re-initialization."
+    ::= { rfc2544ResultsRecoveryEntry 1 }
+
+rfc2544ResultsRecoveryFrameSize    OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate the frame sizes  computed from a single instance.
+        Possible frame sizes are defined in 'rfc2544SettingsFrameSizes'."
+    ::= { rfc2544ResultsRecoveryEntry 2 }
+
+rfc2544ResultsRecoveryName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be
+        an interface text name, such as 'eth0', a stream identifier such as
+        'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+        The instance textual name associated should be conserved in other SNMP
+        tables or OIDs whenever possible."
+    ::= { rfc2544ResultsRecoveryEntry 3 }
+
+rfc2544ResultsRecoveryTestRate  OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Parameter indicated a percentage value of  test traffic."
+    ::= { rfc2544ResultsRecoveryEntry 4 }
+
+rfc2544ResultsRecoveryTime  OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "microseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Time invested to recover from an overload condition expressed
+        in microseconds."
+    ::= { rfc2544ResultsRecoveryEntry 5 }
+
+rfc2544ResultsRecoveryFail  OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Reports if the frame size pass or fail the throughput test.The
+        truth value indicate fail and the false value indicate pass."
+    ::= { rfc2544ResultsRecoveryEntry 6 }
+
+rfc2544ResultsRecoveryRowStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'rfc2544ResultsRecovery'. Enables
+         dynamic creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCE documents to get more
+         information about the encoding and use of the status column."
+    REFERENCE
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { rfc2544ResultsRecoveryEntry 7 }
+
+END

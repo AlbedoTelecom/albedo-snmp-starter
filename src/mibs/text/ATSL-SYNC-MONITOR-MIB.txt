@@ -1,0 +1,1745 @@
+ATSL-SYNC-MONITOR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for synchronization performance monitoring.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32, Integer32   FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus, 
+    TEXTUAL-CONVENTION                                    FROM SNMPv2-TC
+    atslGeneral, TableIndex, Real32, RatioPercentage,
+    Int64                                                 FROM ATSL-MIB;
+
+syncMonitor MODULE-IDENTITY
+    LAST-UPDATED "201707200000Z" -- 20 July, 2017
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB defines basic tools required to run a synchronization test in 
+         Albedo SNMP agents supporting this kind of test. The MIB is oriented 
+         to configure the tests themselves and not the interfaces where the 
+         tests are to be run.
+
+         Tables and scalars defined here are conceived to be compatible with 
+         synchronization tests running over E1, T1, Ethernet and IEEE 1588 / 
+         PTP interfaces. Jitter, wander and other more specialized tests (FPP, 
+         time error, etc.). There is one limitation in the results provided, 
+         however. All results depending specifically on the protocol or
+         interface where the test runs require their own MIB. For example, no 
+         counts for the different message types used by the PTP protocol are 
+         supplied by this MIB. It is understood that a PTP results MIB with 
+         this purpose exists
+
+         Two other important topics not covered by this MIB but required to run 
+         the synchronization tests are listed below:
+
+         1. Clock reference inputs and outputs. This MIB assumes that the clock 
+            reference is configured before the test is done. Some special MIB is 
+            required to do this operation. Jitter tests do not require an 
+            external reference and therefore this requirement is not so 
+            important for these kind of tests.
+
+         2. The IEEE 1588 / PTP protocol has be configured before any test    
+            could be run over this interface. This protocol has special settings 
+            and controls and it requires an specific PTP configuration MIB that 
+            is out of the scope of this module.
+
+         3. Phase impairment generation is not covered by this MIB and it is 
+            also expected that a MIB specifically conceived for this purpose 
+            is able to carry out this task.
+
+         This MIB module is made up of several scalars and configuration / 
+         results tables. The current MIB module provides support of the 
+         following components:
+
+         Scalars
+
+         - 'syncMonitorRun': Starts / Stops all currently configured
+           synchronization tests in all instances in the managed entity. The
+           number of monitoring instances may not be the same in different
+           managed entities. Some agents may have one single synchronization
+           test instance while others may support several simultaneous
+           instances. The instance number may also depend on how the managed
+           entity is configured.
+
+         Tables
+
+         - 'syncMonitorWanderSettingsTable': Configures and runs a wander test 
+           in the managed entity. Wander in a digital signal is defined as a 
+           slow  phase fluctuation that degrades the quality of the clock 
+           embedded in the signal. The upper limit to the wander frequency band 
+           is usually defined to be 10 Hz but wander could have periods of hours 
+           or even days. Wander is propagated through the network and because it 
+           is not absorbed or filtered, it is accumulated thus impairing the 
+           timing signal. This concept of phase fluctuation could be translated 
+           without relevant modifications to synchronization protocols for 
+           packet switched networks such as PTP / IEEE 1588v2. Measuring wander 
+           to assess the long term stability of a timing signal involves the use 
+           of an accurate clock reference due to the inability to filter out 
+           wander components from the signal under test. The phase of the 
+           reference clock is then compared with the phase corresponding  to the 
+           signal under test. Performance metrics are then derived from the 
+           phase error. 
+
+         - 'syncMonitorFPPSettingsTable': Configures and runs a Floor Delay 
+           Population test in the managed entity. The floor delay population 
+           test attempts to implement a mechanism to measure the number of 
+           samples suitable for slave synchronization. With this objective in 
+           mind, the test defines an acceptable end-to-end delay range. The 
+           lowest delay is defined to be the floor delay for the path under 
+           test. In other words, the smallest time recorded for a packet as it 
+           is transmitted through the path. The highest delay is obtained by 
+           adding a fixed time to the floor delay.  Samples are rated as 
+           conforming if they are found between the minimum and the maximum 
+           delay. Not conforming packets exhibit an end-to-end  delay larger 
+           than the maximum. By definition, there are no packets with end-to-end 
+           delay below the floor delay.
+
+         - 'syncMonitorJitterSettingsTable': Configures a jitter test in the 
+           managed entity. Jitter is defined as short-term variations of the 
+           significant instants of a digital signal from their reference 
+           positions in time. In other words, it is a phase oscillation with a 
+           frequency higher than 10 Hz. Jitter causes sampling errors and 
+           provokes slips in the phase-locked loops (PLL) buffers. The 
+           parameters that characterize the jitter of a digital signal are    
+           amplitude and frequency. The amplitude quantifies the extent to 
+           which a significant instant deviates from its nominal reference 
+           position. The frequency tells us how quickly this significant instant 
+           is moving relative to its ideal position in time.
+
+         - 'syncMonitorPhaseAnalysisTable': This table accounts for different 
+           performance parameters used to evaluate the synchronization quality  
+           in circuit and packet switched networks. The main references for the 
+           metrics reported by this table are ITU-T G.810 for generic 
+           performance metrics and ITU-T G.8260 for metrics specifically defined 
+           for packet switched networks. Performance of both frequency 
+           distribution deployments (frequency offset, frequency drift, TIE) and 
+           phase distribuiton deployments (TE, constant TE, dynamic TE) is 
+           covered. Maximum and minimum statistics are given when necessary to 
+           help the controlling unit to keep control of the variation ranges 
+           corresponding to the given metrics.
+
+         - 'syncMonitorWanderAnalysisTable': Reports wander test results in the 
+           managed entity. Each row in the table represents the wander results 
+           for an specific observation window. Moreover, results could be 
+           referred to different testing blocks or instances. For this reason, 
+           the table has a double index structure. The same results table 
+           applies both to circuit and packet interfaces. In results referred 
+           to packet interfaces is to be understood that the 'TIE', 'MTIE' and 
+           'TDEV' results represent the equivalent metrics for these kind of 
+           interfaces: 'pktFilteredTIE', 'pktFilteredMTIE' and 
+           'pktFilteredTDEV'.
+
+         - 'syncMonitorFPPAnalysisTable': The floor delay population test 
+           attempts to implement a mechanism to measure the number of samples 
+           suitable for slave synchronization. With this objective in mind, the 
+           test defines an acceptable end-to-end delay range. The lowest delay 
+           is defined to be the floor delay for the path under test. In other 
+           words, the smallest time recorded for a packet as it is transmitted 
+           through the path. The highest delay is obtained by adding a fixed 
+           time to the floor delay. Samples are rated as conforming if they are 
+           found between the minimum and the maximum delay. Not conforming 
+           packets exhibit an end-to-end delay larger than the maximum. By 
+           definition, there are no packets with end-to-end delay below 
+           the floor delay.
+
+         - 'syncMonitorJitterAnalysisTable': This table contains information 
+           about jitter test results computed by the agent. The purpose of the 
+           jitter test is to obtain the jitter amplitude (expressed in UIs) 
+           present at the output port of a specific network equipment in certain 
+           frequency bands. The ITU-T specifies and limits the maximum amount of 
+           jitter allowed in a network. In particular, ITU-T G.825 (SDH) and 
+           G.823 (PDH), and Telcordia GR-253 (SONET) and GR-499 (T-carrier), 
+           limit the maximum amount of jitter in network equipment output ports. 
+           This output jitter may be generated by the equipment itself, or may 
+           result from the transfer of jitter from one of the inputs of the 
+           element, either the data input or the synchronization input. The 
+           result of the measurement is the jitter amplitude in a specific 
+           bandwidth, specified by the above-mentioned recommendations for each 
+           rate in the PDH and SDH hierarchies. 
+
+         Should we wish to measure  the jitter generated by the NE, we need to 
+         connect an input signal free of jitter.
+    
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - AT-2048 E1 / Datacom Tester.
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+         - Ether10.Genius"
+    REVISION     "201707200000Z" -- 20 July, 2017
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 31 }
+
+
+TIEValue ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-1"
+    STATUS            current
+    DESCRIPTION
+         "Represents a Time Interval Error in nanoseconds with one decimal
+          digit.  Both positive and negative numbers are accepted (and zero,
+          which is encoded as 0.000)"
+    SYNTAX            Integer32
+
+MTIEValue ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-1"
+    STATUS            current
+    DESCRIPTION
+         "Represents a Maximum Time Interval Error in nanoseconds with one decimal
+          digit.  Both positive and negative numbers are accepted (and zero,
+          which is encoded as 0.000)"
+    SYNTAX            Unsigned32
+
+TDEVValue ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-1"
+    STATUS            current
+    DESCRIPTION
+         "Represents a Time Deviation in nanoseconds with one decimal
+          digit.  Both positive and negative numbers are accepted (and zero,
+          which is encoded as 0.000)"
+    SYNTAX            Unsigned32
+
+--
+-- Top level module structure
+--
+
+syncMonitorControl      OBJECT IDENTIFIER ::= { syncMonitor 1 }
+
+--
+-- Global sync test enable / disable control group
+--
+
+syncMonitorRun OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops all currently configured synchronization tests in
+         all instances in the managed entity. The number of monitoring
+         instances may not be the same in different managed entities. Some
+         agents may have one single synchronization test instance while
+         others may support several simultaneous instances. The instance
+         number may also depend on how the managed entity is configured."
+    ::= { syncMonitorControl 1 }
+
+--
+--  Wander test settings
+--
+
+syncMonitorWanderSettingsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorWanderSettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures and runs a wander test in the managed entity. Wander
+         in a digital signal is defined as a slow phase fluctuation that
+         degrades the quality of the clock embedded in the signal. The upper
+         limit to the wander frequency band is usually defined to be 10 Hz but
+         wander could have periods of hours or even days. Wander is propagated
+         through the network and because it is not absorbed or filtered, it is
+         accumulated impairing the timing signal. This concept of phase
+         fluctuation could be translated without relevant modifications to
+         synchronization protocols for packet switched networks such as PTP / 
+         IEEE 1588v2.
+
+         Measuring wander to assess the long term stability of a timing signal 
+         involves the use of an accurate clock reference due to the unability 
+         to filter out wander components from the signal under test. The phase 
+         of the reference clock is then compared with the phase corresponding 
+         to the signal under test. Performance metrics are then derived from 
+         the phase error."
+    ::= { syncMonitor 2 }
+
+syncMonitorWanderSettingsEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorWanderSettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available synchronization monitoring instances."
+    INDEX { syncMonitorWanderSettingsInstance }
+    ::= { syncMonitorWanderSettingsTable 1 }
+
+SyncMonitorWanderSettingsEntry ::= SEQUENCE {
+    syncMonitorWanderSettingsInstance         TableIndex,
+    syncMonitorWanderSettingsName             DisplayString,
+    syncMonitorWanderSettingsEnable           TruthValue,
+    syncMonitorWanderSettingsRun              TruthValue,
+    syncMonitorWanderSettingsTimeMax          INTEGER,
+    syncMonitorWanderSettingsMethod           INTEGER,
+    syncMonitorWanderSettingsLength           Unsigned32,
+    syncMonitorWanderSettingsPercentileMin    RatioPercentage,
+    syncMonitorWanderSettingsPercentileMax    RatioPercentage,
+    syncMonitorWanderSettingsBWLength         Unsigned32,
+    syncMonitorWanderSettingsStatus           RowStatus
+}
+
+syncMonitorWanderSettingsInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management 
+         to the next re-initialization."
+    ::= { syncMonitorWanderSettingsEntry 1 }
+
+syncMonitorWanderSettingsName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorWanderSettingsEntry 2 }
+
+syncMonitorWanderSettingsEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the wander test. This OID does not actually runs 
+         the test. It just selects the test to be run once the 'syncMonitorRun' 
+         is configured to 'true'. It also enables the controlling entity to 
+         configure the settings provided for this test and even to run an 
+         individual test with 'syncMonitorWanderSettingsRun' if supported by the 
+         managed entity."
+    ::= { syncMonitorWanderSettingsEntry 3 }
+
+syncMonitorWanderSettingsRun OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Runs or stops a wander test that has been previously enabled with the 
+         assistance of the 'syncMonitorWanderSettingsEnable' OID. This OID is 
+         complementary to the 'syncMonitorRun' but while this OID runs all 
+         tests that have been previously enabled the 
+         'syncMonitorWanderSettingsRun' runs or stops the wander test only."
+    ::= { syncMonitorWanderSettingsEntry 4 }
+
+syncMonitorWanderSettingsTimeMax OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          window100 (0),
+                          window1000 (1),
+                          window10000 (2),
+                          window100000 (3),
+                          window1000000 (4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Maximum window length for MTIE and TDEV results. The measurement is 
+         automatically stopped when the maximum observation time configured 
+         through this OID is reached.
+
+         Currently allowed values for the Observation time are 100 s 
+         ('window100'), 1000 s ('window1000'), 10000 s ('window10000'), 100000 
+         s ('window100000') and 1000000 s ('window1000000').
+
+         An MTIE / TDEV measurement may stop before reaching the maximum 
+         observation time if a critical error such a loss of clock reference or 
+         a loss of signal also stops the test."
+    ::= { syncMonitorWanderSettingsEntry 5 }
+
+syncMonitorWanderSettingsMethod OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          minimum (0),
+                          maximum (1),
+                          percentile (2),
+                          band (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures one of the packet selection method to be used to filter PTP 
+         samples to compute wander performance metrics. The selection method 
+         configured in this field constitutes a non linear filter applied to 
+         the timing input before it is transferred to the wander metric 
+         calculation block. This filtering is used to discard samples and avoid 
+         unrealistic wander results. For example the filter could be used to 
+         discard packets with potentially large delay variation. The selection 
+         methods supported by the test units are defined in ITU-T G.8260 and 
+         they are listed below:
+
+         - 'minimum': Selects the packet with smaller end-to-end delay within 
+           the filtering window.
+
+         - 'maximum': Selects the packet with larger end-to-end delay within 
+           the filtering window.
+
+         - 'percentile': Uses a percentile value expressed in % to configure 
+           the packets to be processed by the MTIE / TDEV block 
+           ('syncMonitorWanderSettingsPercentileMax'). Packets with an 
+           end-to-end delay larger than the configured percentile are not taken 
+           into account.
+
+         - 'band': Uses two percentile values expressed in % to configure the 
+           packets to be processed by the MTIE / TDEV block. These percentiles 
+           are configured through the 'syncMonitorWanderSettingsPercentileMin' 
+           and 'syncMonitorWanderSettingsPercentileMax' OID. Samples with a 
+           delay smaller than the minimum percentile or larger than maximum
+           percentile are ignored by the MTIE / TDEV processing block.
+
+         This OID is to be configured only in tests based on the 
+         'pktFilteredTIE', 'pktFilteredMTIE' and 'pktFilteredTDEV' metrics 
+         such as those for IEEE 1588-2008 / PTP packet interfaces."
+    REFERENCE 
+        "- ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorWanderSettingsEntry 6 }
+
+syncMonitorWanderSettingsLength OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the length of the not linear sample selection filter
+         in seconds. Longer selection filters may potentially generate more 
+         accurate results but they involve an increase in the test period or at 
+         least in the amount of time required to get the first results."
+    REFERENCE 
+        "- ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorWanderSettingsEntry 7 }
+
+syncMonitorWanderSettingsPercentileMin OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Minimum allowed percentile in Band selection modes. This OID is 
+         relevant only if 'syncMonitorWanderSettingsMethod' is configured to 
+         'band'."
+    REFERENCE 
+        "- ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorWanderSettingsEntry 8 }
+
+syncMonitorWanderSettingsPercentileMax OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Maximum allowed percentile in Band selection modes. This OID is 
+         relevant only if 'syncMonitorWanderSettingsMethod' is configured to 
+         'percentile' or 'band'."
+    REFERENCE 
+        "- ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorWanderSettingsEntry 9 }
+
+syncMonitorWanderSettingsBWLength OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Window length expressed in seconds for the linear filtering processing 
+         block placed before the MTIE and TDEV block. Unlike the selection 
+         filter, the linear filtering operates by averaging sample values 
+         before they are used to compute the MTIE and TDEV values. With this 
+         operation, it is pretended to simulate the behaviour of a real timing 
+         synchronization circuit that always tends to average the samples on 
+         its input.
+
+         The BW filter window length is subject to the same kind of trade off 
+         that than the selection window. The longer the window the more 
+         accurate results but longer windows involve longer test periods as 
+         well.
+
+         This OID is to be configured only in tests based on the 
+         'pktFilteredTIE', 'pktFilteredMTIE' and 'pktFilteredTDEV' metrics 
+         such as those for IEEE 1588-2008 / PTP packet interfaces."
+    REFERENCE 
+        "- ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorWanderSettingsEntry 10 }
+
+syncMonitorWanderSettingsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorWanderSettingsTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorWanderSettingsEntry 11 }
+
+--
+--  Floor delay population settings
+--
+
+syncMonitorFPPSettingsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorFPPSettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures and runs a Floor Delay Population test in the managed 
+         entity. The floor delay population test attempts to implement a 
+         mechanism to measure the number of samples suitable for slave 
+         synchronization. With this objective in mind, the test defines an 
+         acceptable end-to-end delay range. The lowest delay is defined to be
+         the floor delay for the path under test. In other words, the smallest 
+         time recorded for a packet as it is transmitted through the path. The 
+         highest delay is obtained by adding a fixed time to the floor delay. 
+         Samples are rated as conforming if they are found between the minimum 
+         and the maximum delay. Not conforming packets exhibit an end-to-end 
+         delay larger than the maximum. By definition, there are no packets 
+         with end-to-end delay below the floor delay."
+    ::= { syncMonitor 3 }
+
+syncMonitorFPPSettingsEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorFPPSettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available synchronization monitoring instances."
+    INDEX { syncMonitorFPPSettingsInstance }
+    ::= { syncMonitorFPPSettingsTable 1 }
+
+SyncMonitorFPPSettingsEntry ::= SEQUENCE {
+    syncMonitorFPPSettingsInstance            TableIndex,
+    syncMonitorFPPSettingsName                DisplayString,
+    syncMonitorFPPSettingsEnable              TruthValue,
+    syncMonitorFPPSettingsRun                 TruthValue,
+    syncMonitorFPPSettingsSettlingTime        Unsigned32,
+    syncMonitorFPPSettingsWindowLength        Unsigned32,
+    syncMonitorFPPSettingsDelta               Unsigned32,
+    syncMonitorFPPSettingsStatus              RowStatus
+}
+
+syncMonitorFPPSettingsInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management 
+         to the next re-initialization."
+    ::= { syncMonitorFPPSettingsEntry 1 }
+
+syncMonitorFPPSettingsName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorFPPSettingsEntry 2 }
+
+syncMonitorFPPSettingsEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the Floor Delay Population test. This OID does not 
+         actually runs the test. It just selects the test to be run once the 
+         'syncMonitorRun' is configured to 'true'. It also enables the 
+         controlling entity to configure the settings provided for this 
+         test and even to run an individual test with 
+         'syncMonitorFPPSettingsRun' if supported by the managed entity."
+    ::= { syncMonitorFPPSettingsEntry 3 }
+
+syncMonitorFPPSettingsRun OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Runs or stops a Floor Delay Population test that has been previously 
+         enabled with the assistance of the 'syncMonitorFPPSettingsEnable' 
+         OID. 
+
+         This OID is complementary to the 'syncMonitorRun' but while this 
+         OID runs all tests that have been previously enabled the 
+         'syncMonitorFPPSettingsRun' runs or stops the Floor Delay Population 
+         test only."
+    ::= { syncMonitorFPPSettingsEntry 4 }
+
+syncMonitorFPPSettingsSettlingTime OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Amount of time devoted to compute the floor delay. Longer values for 
+         this setting contribute to a more accurate estimation of the floor 
+         delay and therefore higher quality in the test results."
+    ::= { syncMonitorFPPSettingsEntry 5 }
+
+syncMonitorFPPSettingsWindowLength OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "seconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The Floor Delay Population method is based on a sliding window 
+         mechanism. The relevant test metrics are referred to a time window 
+         that changes its position in time. 
+
+         This OID configures the window length to compute all Floor Delay 
+         Population test results. ITU-T G.8261.1 uses a window length of 200 s 
+         to specify the network operation limits."
+    ::= { syncMonitorFPPSettingsEntry 6 }
+
+syncMonitorFPPSettingsDelta OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This OID Configures the delay excess from the floor delay used to 
+         determine the conformity of a received sample. ITU-T G.8261 uses a 
+         delta of 150 microseconds to specify the operation network limit"
+    ::= { syncMonitorFPPSettingsEntry 7 }
+
+syncMonitorFPPSettingsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorFPPSettingsTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorFPPSettingsEntry 8 }
+
+--
+--  Jitter test settings
+--
+
+syncMonitorJitterSettingsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorJitterSettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures a jitter test in the managed entity. Jitter is defined as 
+         short-term variations of the significant instants of a digital signal 
+         from their reference positions in time. In other words, it is a phase 
+         oscillation with a frequency higher than 10 Hz. Jitter causes sampling 
+         errors and provokes slips in the phase-locked loops (PLL) buffers.
+
+         The parameters that characterize the jitter of a digital signal are 
+         amplitude and frequency. The amplitude quantifies the extent to which 
+         a significant instant deviates from its nominal reference position. 
+         The frequency tells us how quickly this significant instant is moving 
+         relative to its ideal position in time."
+    ::= { syncMonitor 4 }
+
+syncMonitorJitterSettingsEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorJitterSettingsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available synchronization monitoring instances."
+    INDEX { syncMonitorJitterSettingsInstance }
+    ::= { syncMonitorJitterSettingsTable 1 }
+
+SyncMonitorJitterSettingsEntry ::= SEQUENCE {
+    syncMonitorJitterSettingsInstance         TableIndex,
+    syncMonitorJitterSettingsName             DisplayString,
+    syncMonitorJitterSettingsEnable           TruthValue,
+    syncMonitorJitterSettingsRun              TruthValue,
+    syncMonitorJitterSettingsIntegrationTime  INTEGER,
+    syncMonitorJitterSettingsBandRange        INTEGER,
+    syncMonitorJitterSettingsFilter           INTEGER,
+    syncMonitorJitterSettingsHitThreshold     Real32,
+    syncMonitorJitterSettingsStatus           RowStatus
+}
+
+syncMonitorJitterSettingsInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management 
+         to the next re-initialization."
+    ::= { syncMonitorJitterSettingsEntry 1 }
+
+syncMonitorJitterSettingsName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorJitterSettingsEntry 2 }
+
+syncMonitorJitterSettingsEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the Jitter test. This OID does not actually runs 
+         the test. It just selects the test to be run once the 'syncMonitorRun' 
+         is configured to 'true'. It also enables the controlling  entity to 
+         configure the settings provided for this test and even to run an 
+         individual test with 'syncMonitorJitterSettingsRun' if supported by the 
+         managed entity."
+    ::= { syncMonitorJitterSettingsEntry 3 }
+
+syncMonitorJitterSettingsRun OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Runs or stops a Jitter test that has been previously enabled 
+         with the assistance of the 'syncMonitorJitterSettingsEnable' 
+         OID. 
+
+         This OID is complementary to the 'syncMonitorRun' but while this 
+         OID runs all tests that have been previously enabled the 
+         'syncMonitorJitterSettingsRun' runs or stops the jitter test only."
+    ::= { syncMonitorJitterSettingsEntry 4 }
+
+syncMonitorJitterSettingsIntegrationTime OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          int1s (0),
+                          int10s (1),
+                          int60s (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This OID accounts for how much time is the jitter observed before 
+         displaying its value.
+
+         The jitter measurement has a sliding window mechanism that is used to 
+         compute jitter peak-to-peak and rms values. The integration period is 
+         the length of the measurement sliding window."
+    ::= { syncMonitorJitterSettingsEntry 5 }
+
+syncMonitorJitterSettingsBandRange OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          mhz100 (0),
+                          mhz1000 (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Jitter is usually defined as a phase impairment with frequency above 
+         10 Hz but this range can use extended measurement bands for jitter 
+         beyond the 10 Hz in some agents.
+
+         This control sets the jitter measurement loop frequency response to 
+         select the standard or one of the extended bands for measuring jitter. 
+         The available options for this setting are the following:
+
+         - 'mhz100' (> 0.1 Hz): Selects the 0.1 Hz extended jitter measurement
+           band. This band accounts for phase impairments with periods of up to 
+           10 s.
+
+         - 'mhz1000' (> 1 Hz): Selects the 1 Hz extended jitter measurement 
+           band. This band accounts for phase impairments with periods of up to 
+           1 s.
+
+         - 'mhz10000' (> 10 Hz): Selects the 10 Hz standard jitter measurement
+           band. This band accounts for phase impairments with periods of up to 
+           0.1 s."
+    ::= { syncMonitorJitterSettingsEntry 6 }
+
+syncMonitorJitterSettingsFilter OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          none (0),
+                          lp (1),
+                          hp1andlp (2),
+                          hp2andlp (3),
+                          rmsandlp (4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The jitter amplitude can be filtered by High-Pass (HP) and Low-pass 
+         (LP) filters before being represented to make sure that only the 
+         important frequency components are taken into account. The pass and 
+         stop bands of these filters is specified by ITU-T O.172.
+
+         Unlike the measurement bandwidth set by the Band range control, the 
+         measurement Filter applied by this control are applied after the 
+         signal passes through the jitter measurement PLL. The tester supports 
+         the following filtering settings:
+
+         - 'none': It applies no filters to the output of the jitter measurement
+           PLL. The whole band is taken into account by the tester.
+
+         - 'lp': Applies the LP filter defined in ITU-T O.172 for jitter 
+           measurements. This filter has a cut-off frequency at 100 kHz (E1 
+           interface) or 40 kHz (T1 interface). 
+
+         - 'hp1andlp': Applies at the same time the HP1 and the LP filters as 
+           they are defined by ITU-T O.172. The result is that the jitter 
+           measurement pass band stands between 20 Hz and 100 kHz (E1 
+           interface) or 10 Hz and 40 kHz (T1 interface).
+
+         - 'hp2andlp': Applies at the same time the HP2 and the LP filters as 
+           they are defined by ITU-T O.172. The result is that the jitter 
+           measurement pass band stands between 18 kHz and 100 kHz (E1 
+           interface) or 8 kHz and 100 kHz (T1 interface).
+
+         - 'rmsandlp': Applies at the same time a 12 kHz HP and the ITU-T O.172 
+           LP filter for 2048 kb/s bit rate. The resulting measurement pass 
+           band stands between 12 kHz and 100 kHz.  "
+    ::= { syncMonitorJitterSettingsEntry 7 }
+
+syncMonitorJitterSettingsHitThreshold OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "UIpp"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the threshold used to account for phase hit events in UIpp."
+    ::= { syncMonitorJitterSettingsEntry 8 }
+
+syncMonitorJitterSettingsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorJitterSettingsTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorJitterSettingsEntry 9 }
+
+--
+--  Frequency / phase offset results
+--
+
+syncMonitorPhaseAnalysisTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorPhaseAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table accounts for different performance parameters used to 
+         evaluate the performance in circuit and packet switched networks. The 
+         main references for the metrics reported by this table are ITU-T G.810 
+         for generic performance metrics and ITU-T G.8260 for metrics 
+         specifically defined for packet switched networks.
+
+         Performance of both frequency distribution deployments (frequency 
+         offset, frequency drift, TIE) and phase distribuiton deployments (TE, 
+         constant TE, dynamic TE) is covered. Maximum and minimum statistics 
+         are given when necessary to help the controlling unit to keep control 
+         of the variation ranges corresponding to the given metrics."
+    ::= { syncMonitor 5 }
+
+syncMonitorPhaseAnalysisEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorPhaseAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available synchronization monitoring instances."
+    INDEX { syncMonitorPhaseAnalysisInstance }
+    ::= { syncMonitorPhaseAnalysisTable 1 }
+
+SyncMonitorPhaseAnalysisEntry ::= SEQUENCE {
+    syncMonitorPhaseAnalysisInstance          TableIndex,
+    syncMonitorPhaseAnalysisName              DisplayString,
+    syncMonitorPhaseAnalysisFOffset           Real32,
+    syncMonitorPhaseAnalysisFOffsetMax        Real32,
+    syncMonitorPhaseAnalysisFDrift            Real32,
+    syncMonitorPhaseAnalysisFDriftMax         Real32,
+    syncMonitorPhaseAnalysisTIE               Real32,
+    syncMonitorPhaseAnalysisTIEMax            Real32,
+    syncMonitorPhaseAnalysisTIEMin            Real32,
+    syncMonitorPhaseAnalysisTE                Int64,
+    syncMonitorPhaseAnalysisTEMax             Int64,
+    syncMonitorPhaseAnalysisTEMin             Int64,
+    syncMonitorPhaseAnalysisConstantTE        Int64,
+    syncMonitorPhaseAnalysisConstantTEMax     Int64,
+    syncMonitorPhaseAnalysisConstantTEMin     Int64,
+    syncMonitorPhaseAnalysisDynamicTE         Integer32,
+    syncMonitorPhaseAnalysisDynamicTEMax      Integer32,
+    syncMonitorPhaseAnalysisDynamicTEMin      Integer32,
+    syncMonitorPhaseAnalysisStatus            RowStatus
+}
+
+syncMonitorPhaseAnalysisInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { syncMonitorPhaseAnalysisEntry 1 }
+
+syncMonitorPhaseAnalysisName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorPhaseAnalysisEntry 2 }
+
+syncMonitorPhaseAnalysisFOffset OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppb"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Difference between the frequency of the received signal and the 
+         reference signal frequency measured in parts per billion (ppb). This 
+         parameter corresponds with the 'fractional frequency deviation' 
+         defined in ITU-T G.810.
+
+         Measurement of the frequency offset does not require to start a 
+         test with 'syncMonitorRun' or by any other means. It is a 
+         permanent result that is available even if there is not an ongoing 
+         test."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 3 }
+
+syncMonitorPhaseAnalysisFOffsetMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppb"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum value of the frequency offset 
+         ('syncMonitorPhaseAnalysisFOffset') measured from the beginning of     
+         the test / monitoring session and expressed in parts per billion 
+         (ppb). The sign is not considered when the maximum offset is computed. 
+         For example, if the measured offset values are between -4 ppb and +3 
+         ppb, the recorded maximum offset will be -4 ppb."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 4 }
+
+syncMonitorPhaseAnalysisFDrift OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppb/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Change rate of the frequency offset expressed in parts per million per 
+         second (ppb/s).
+
+         Measurement of the frequency offset does not require to start a  test 
+         with 'syncMonitorRun' or by any other means. It is a permanent 
+         result that is available even if there is not an ongoing test."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 5 }
+
+syncMonitorPhaseAnalysisFDriftMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppb/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum frequency drift ('syncMonitorPhaseAnalysisFDrift' )registered 
+         from the beginning of the test. The sign is not considered when the 
+         maximum offset is computed. For example, if the measured drift values 
+         are between -4 ppb/s and +3 ppb/s, the recorded maximum drift will be 
+         -4 ppb/s"
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 6 }
+
+syncMonitorPhaseAnalysisTIE OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Gives the current Time Interval Error (TIE). The TIE is the 
+         cumulative phase error from the beginning of the test computed in      
+         time units."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 7 }
+
+syncMonitorPhaseAnalysisTIEMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the maxmimum TIE measured from the beginning of the test / 
+         monitoring session as given by the 'syncMonitorPhaseAnalysisTIE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 8 }
+
+syncMonitorPhaseAnalysisTIEMin OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the minimum TIE measured from the beginning of the test / 
+         monitoring session as given by the 'syncMonitorPhaseAnalysisTIE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 9 }
+
+syncMonitorPhaseAnalysisTE OBJECT-TYPE
+    SYNTAX            Int64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total TE. This result accounts for the difference in time units 
+         between the time carried by the signal under test minus the reference.
+         
+         Computing the Total TE requires a time reference. Examples of such 
+         kind of reference clocks are ToD interfaces or GNSS derived references"
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 10 }
+
+syncMonitorPhaseAnalysisTEMax OBJECT-TYPE
+    SYNTAX            Int64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the maxmimum TE measured from the beginning of the test / 
+         monitoring session as given by the 'syncMonitorPhaseAnalysisTIE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 11 }
+
+syncMonitorPhaseAnalysisTEMin OBJECT-TYPE
+    SYNTAX            Int64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the minimum TE measured from the beginning of the test / 
+         monitoring session as given by the 'syncMonitorPhaseAnalysisTIE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 12 }
+    
+syncMonitorPhaseAnalysisConstantTE OBJECT-TYPE
+    SYNTAX            Int64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Constant Time Error (cTE). This result expresses TE components that 
+         are immune to filtering. Such TE components are the result of, for 
+         example, asymmetry in the transmission medium between network elements 
+         or asymmetries within network elements. The cTE spans the frequency 
+         band between 0 and 0.1 Hz. Constant (0 Hz) cTE could theoretically
+         be compensated through a static setting in the slave equipment, but 
+         slowly varying TE with periods of hours or days is both difficult to 
+         compensate or filter and it therefore should be avoided as much as 
+         possible."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 13 }
+
+syncMonitorPhaseAnalysisConstantTEMax OBJECT-TYPE
+    SYNTAX            Int64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the maxmimum constant Time Error measured from the beginning 
+         of the test / monitoring session as given by the 
+         'syncMonitorPhaseAnalysisConstantTE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 14 }
+
+syncMonitorPhaseAnalysisConstantTEMin OBJECT-TYPE
+    SYNTAX            Int64
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the minimum constant Time Error measured from the beginning 
+         of the test / monitoring session as given by the 
+         'syncMonitorPhaseAnalysisConstantTE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 15 }
+    
+syncMonitorPhaseAnalysisDynamicTE OBJECT-TYPE
+    SYNTAX            Integer32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Dynamic Time error (dTE). High frequency component of the TE. It is 
+         related to random noise accumulation due to packet delay variation 
+         experienced by the timing signal packets or due to any other phase 
+         noise source. The power spectrum of the dynamic TE is spread out over 
+         the frequencies above 0.1 Hz and the power can be reduced, to some 
+         extent, through low-pass filtering."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 16 }
+
+syncMonitorPhaseAnalysisDynamicTEMax OBJECT-TYPE
+    SYNTAX            Integer32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the maxmimum dynamic Time Error measured from the beginning 
+         of the test / monitoring session as given by the 
+         'syncMonitorPhaseAnalysisDynamicTE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 17 }
+
+syncMonitorPhaseAnalysisDynamicTEMin OBJECT-TYPE
+    SYNTAX            Integer32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Provides the minimum dynamic Time Error measured from the beginning 
+         of the test / monitoring session as given by the 
+         'syncMonitorPhaseAnalysisDynamicTE' OID."
+    REFERENCE 
+        "- ITU-T G.810: Definitions and terminology for synchronization networks
+         - ITU-T G.8260: Definitions and terminology for synchronization in 
+           packet networks"
+    ::= { syncMonitorPhaseAnalysisEntry 18 }
+
+syncMonitorPhaseAnalysisStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorPhaseAnalysisTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorPhaseAnalysisEntry 19 }
+
+--
+--  Wander results
+--
+
+syncMonitorWanderAnalysisTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorWanderAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Reports wander test results in the managed entity. Each row in the 
+         table represents the wander results for an specific observation 
+         window. Moreover, results could be referred to different testing 
+         blocks or instances. For this reason, the table has a double index 
+         structure.
+
+         The same results table applies both to circuit and packet interfaces. 
+         In results referred to packet interfaces is to be understood that the 
+         'TIE', 'MTIE' and 'TDEV' results represent the equivalent metrics for 
+         these kind of interfaces: 'pktFilteredTIE', 'pktFilteredMTIE' and 
+         'pktFilteredTDEV'."
+    ::= { syncMonitor 6 }
+
+syncMonitorWanderAnalysisEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorWanderAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of 
+         the available synchronization monitoring instances."
+    INDEX { syncMonitorWanderAnalysisInstance, syncMonitorWanderAnalysisIndex }
+    ::= { syncMonitorWanderAnalysisTable 1 }
+
+SyncMonitorWanderAnalysisEntry ::= SEQUENCE {
+    syncMonitorWanderAnalysisInstance         TableIndex,
+    syncMonitorWanderAnalysisIndex            TableIndex,
+    syncMonitorWanderAnalysisName             DisplayString,
+    syncMonitorWanderAnalysisWindowLength     Real32,
+    syncMonitorWanderAnalysisTie              TIEValue,
+    syncMonitorWanderAnalysisMtie             MTIEValue,
+    syncMonitorWanderAnalysisTdev             TDEVValue,
+    syncMonitorWanderAnalysisStatus           RowStatus
+}
+
+syncMonitorWanderAnalysisInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management 
+         to the next re-initialization."
+    ::= { syncMonitorWanderAnalysisEntry 1 }
+    
+syncMonitorWanderAnalysisIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Index to enumerate different wander results computed from a single 
+         monitoring instance. Each result corresponds with an observation 
+         period defined by the 'synMonitorWanderAnalysisWindowLength'."
+    ::= { syncMonitorWanderAnalysisEntry 2 }
+
+syncMonitorWanderAnalysisName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorWanderAnalysisEntry 3 }
+
+syncMonitorWanderAnalysisWindowLength OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "seconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "For TIE results this value represents the time from the beginning of 
+         the wander test. For MTIE and TDEV results this OID is the observation 
+         time. The longest possible observation time is always the elapsed 
+         testing time."
+    ::= { syncMonitorWanderAnalysisEntry 4 }
+
+syncMonitorWanderAnalysisTie OBJECT-TYPE
+    SYNTAX            TIEValue
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The time interval error (TIE) is the phase fluctuation amplitude, which 
+         means that it indicates the phase variation of the clock to be 
+         measured, relative to the phase of an ideal reference clock during 
+         each measurement instant. The time origin, TIE=0 is taken as a 
+         reference at the start of the measurement. The TIE is expressed in 
+         absolute time units."
+    ::= { syncMonitorWanderAnalysisEntry 5 }
+
+syncMonitorWanderAnalysisMtie OBJECT-TYPE
+    SYNTAX            MTIEValue
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The maximum time interval error (MTIE) is the maximum value of 
+         peak-to-peak TIE in a certain observation time. This means that in 
+         order to calculate the MTIE, a time window of predefined length, k, 
+         must be scrolled over the function TIE (n), recording the maximum 
+         peak-to-peak value of the TIE. This can be repeated for different 
+         values of k, thus obtaining a graph of MTIE (k)."
+    ::= { syncMonitorWanderAnalysisEntry 6 }
+
+syncMonitorWanderAnalysisTdev OBJECT-TYPE
+    SYNTAX            TDEVValue
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Time deviation or TDEV is a measurement that characterizes the spectral 
+         content of a TIE (n) signal. This means that it measures the power of 
+         wander frequency components. The TDEV converges for all common types 
+         of phase noise, which makes it possible to identify the source and 
+         eventually correct the causes of degradation in transmission. As it is 
+         the case with MTIE, the TDEV is a function of the observation time k."
+    ::= { syncMonitorWanderAnalysisEntry 7 }
+
+syncMonitorWanderAnalysisStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorWanderAnalysisTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorWanderAnalysisEntry 8 }
+
+--
+--  Floor delay population
+--
+
+syncMonitorFPPAnalysisTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorFPPAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The floor delay population test attempts to implement a mechanism to 
+         measure the number of samples suitable for slave synchronization. With 
+         this objective in mind, the test defines an acceptable end-to-end 
+         delay range. The lowest delay is defined to be the floor delay for the 
+         path under test. In other words, the smallest time recorded for a 
+         packet as it is transmitted through the path. The highest delay is 
+         obtained by adding a fixed time to the floor delay. Samples are rated 
+         as conforming if they are found between the minimum and the maximum 
+         delay. Not conforming packets exhibit an end-to-end delay larger than 
+         the maximum. By definition, there are no packets with end-to-end delay 
+         below the floor delay."
+    ::= { syncMonitor 7 }
+
+syncMonitorFPPAnalysisEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorFPPAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available synchronization monitoring instances."
+    INDEX { syncMonitorFPPAnalysisInstance }
+    ::= { syncMonitorFPPAnalysisTable 1 }
+
+SyncMonitorFPPAnalysisEntry ::= SEQUENCE {
+    syncMonitorFPPAnalysisInstance            TableIndex,
+    syncMonitorFPPAnalysisName                DisplayString,
+    syncMonitorFPPAnalysisTestStatus          INTEGER,
+    syncMonitorFPPAnalysisFPC                 Unsigned32,
+    syncMonitorFPPAnalysisFPCMin              Unsigned32,
+    syncMonitorFPPAnalysisFPR                 Real32,
+    syncMonitorFPPAnalysisFPRMin              Real32,
+    syncMonitorFPPAnalysisFPP                 Real32,
+    syncMonitorFPPAnalysisFPPMin              Real32,
+    syncMonitorFPPAnalysisFloorObserved       Unsigned32,
+    syncMonitorFPPAnalysisFloorEstimated      Unsigned32,
+    syncMonitorFPPAnalysisFloorExcess         Integer32,
+    syncMonitorFPPAnalysisPacketRateOK        TruthValue,
+    syncMonitorFPPAnalysisStatus              RowStatus
+}
+
+syncMonitorFPPAnalysisInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management 
+         to the next re-initialization."
+    ::= { syncMonitorFPPAnalysisEntry 1 }
+
+syncMonitorFPPAnalysisName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorFPPAnalysisEntry 2 }
+
+syncMonitorFPPAnalysisTestStatus OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          stopped (0),
+                          settling (1),
+                          measuring (2)
+                      }
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Contains information about the current FPP test state. FPP tests do 
+         not start immediately once the controlling entity starts monitoring. 
+         They require some temporary training before they start computing 
+         information about performance in terms of FPP and other related 
+         metrics. These are the supported FPP test states:
+
+         - 'stopped': FPP and related metrics not currently computed because no 
+           monitoring has been started.
+
+         - 'settling': Monitoring has started but no metrics are being computed 
+           because the agent is still running a preliminary training procedure. 
+           The amount of time the agent stays in this state before computing 
+           the results depends on the 'syncMonitorFPPSettingsSettlingTime' OID.
+
+         - 'measuring': Monitoring has started and the unit is computing the 
+           FPP and all related metrics."
+    ::= { syncMonitorFPPAnalysisEntry 3 }
+
+syncMonitorFPPAnalysisFPC OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Floor Packet Count (FPC). This is the amount of conforming packets 
+         received within the current window. This count is updated once per 
+         second as new samples are received and the test window moves through 
+         the time axis.
+
+         ITU-T Recommendations do not currently supply any network operation 
+         limit based on the FPC metric."
+    ::= { syncMonitorFPPAnalysisEntry 4 }
+    
+syncMonitorFPPAnalysisFPCMin OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum FPC value computed from the beginning of the monitoring 
+         session. The current FPC result is reported by the 
+         'syncMonitorFPPAnalysisFPC'."
+    ::= { syncMonitorFPPAnalysisEntry 5 }
+
+syncMonitorFPPAnalysisFPR OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "messages/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The Floor Packet Rate (FPR) corresponds with the amount of conforming 
+         samples received per unit time. 
+
+         ITU-T Recommendations do not currently  supply any network operation 
+         limit based on the FPR metric."
+    ::= { syncMonitorFPPAnalysisEntry 6 }
+    
+syncMonitorFPPAnalysisFPRMin OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "messages/s"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum FPR value computed from the beginning of the monitoring 
+         session. The current FPR result is reported by the 
+         'syncMonitorFPPAnalysisFPR'."
+    ::= { syncMonitorFPPAnalysisEntry 7 }
+    
+syncMonitorFPPAnalysisFPP OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The Floor Packet Percentage (FPP) is the ratio of conforming samples to 
+         received packets expressed as a percentage.
+
+         ITU-T G.8261 specifies an FPP of 1% or smaller for a delta of 150 
+         microseconds and a test window of 200 seconds."
+    ::= { syncMonitorFPPAnalysisEntry 8 }
+    
+syncMonitorFPPAnalysisFPPMin OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum FPP value computed from the beginning of the monitoring 
+         session. The current FPP result is reported by the          
+         'syncMonitorFPPAnalysisFPP'."
+    ::= { syncMonitorFPPAnalysisEntry 9 }
+
+syncMonitorFPPAnalysisFloorObserved OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum master-to-slave latency measured from the beginning of the 
+         monitoring session. Both the training and showtime periods are 
+         included in this result."
+    ::= { syncMonitorFPPAnalysisEntry 10 }
+
+syncMonitorFPPAnalysisFloorEstimated OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum master-to-slave latency measured during training period 
+         before the test metric are computed. The accuracy level of FPC, FPR, 
+         FPP and metrics derived from them depend on how accurate is the 
+         floor delay estimate."
+    ::= { syncMonitorFPPAnalysisEntry 11 }
+    
+syncMonitorFPPAnalysisFloorExcess OBJECT-TYPE
+    SYNTAX            Integer32
+    UNITS             "nanoseconds"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Difference between the observed and estimated floor delay. The smaller 
+         the difference the better the result accuracy. This parameter could be 
+         used to verify any change in the path delay due to re-routing or other 
+         reasons. These events are not compatible with accurate FPP results and 
+         they have to be detected to assess the test result validity."
+    ::= { syncMonitorFPPAnalysisEntry 12 }
+
+syncMonitorFPPAnalysisPacketRateOK OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Parameter that confirms whether the received message rate has remained 
+         stable during the whole test duration or not. The 'true' result means 
+         that the rate has not changed. The OID returns 'false' otherwise."
+    ::= { syncMonitorFPPAnalysisEntry 13 }
+    
+syncMonitorFPPAnalysisStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorFPPAnalysisTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorFPPAnalysisEntry 14 }
+
+--
+--  Jitter results
+--
+
+syncMonitorJitterAnalysisTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF SyncMonitorJitterAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains information about jitter test results computed by 
+         the agent. The purpose of the jitter test is to obtain the jitter 
+         amplitude (expressed in UIs) present at the output port of a 
+         specific network equipment in certain frequency bands. The ITU-T 
+         specifies and limits the maximum amount of jitter allowed in a 
+         network. In particular, ITU-T G.825 (SDH) and G.823 (PDH), and 
+         Telcordia GR-253 (SONET) and GR-499 (T-carrier), limit the maximum 
+         amount of jitter in network equipment output ports. This output jitter 
+         may be generated by the equipment itself, or may result from the 
+         transfer of jitter from one of the inputs of the element, either the 
+         data input or the synchronization input. The result of the measurement 
+         is the jitter amplitude in a specific bandwidth, specified by the 
+         above-mentioned recommendations for each rate in the PDH and 
+         SDH hierarchies. 
+
+         Should we wish to measure  the jitter generated by the NE, we need to 
+         connect an input signal free of jitter."
+    ::= { syncMonitor 8 }
+
+syncMonitorJitterAnalysisEntry OBJECT-TYPE
+    SYNTAX            SyncMonitorJitterAnalysisEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to
+         each of the available synchronization monitoring instances."
+    INDEX { syncMonitorJitterAnalysisInstance }
+    ::= { syncMonitorJitterAnalysisTable 1 }
+
+SyncMonitorJitterAnalysisEntry ::= SEQUENCE {
+    syncMonitorJitterAnalysisInstance         TableIndex,
+    syncMonitorJitterAnalysisName             DisplayString,
+    syncMonitorJitterAnalysisLocked           TruthValue,
+    syncMonitorJitterAnalysisAmplitude        Real32,
+    syncMonitorJitterAnalysisAmplitudeMax     Real32,
+    syncMonitorJitterAnalysisAmplitudeRms     Real32,
+    syncMonitorJitterAnalysisHits             Unsigned32,
+    syncMonitorJitterAnalysisHitsSeconds      Unsigned32,    
+    syncMonitorJitterAnalysisStatus           RowStatus
+}
+
+syncMonitorJitterAnalysisInstance OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each synchronization monitoring
+         instance. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network management 
+         to the next re-initialization."
+    ::= { syncMonitorJitterAnalysisEntry 1 }
+
+syncMonitorJitterAnalysisName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the data processing instance. This might be 
+         an interface text name, such as 'eth0', a stream identifier such as 
+         'eth0.0' or just anything describing the instance such as 'eth0-synce'.
+
+         The instance textual name associated should be conserved in other SNMP
+         tables or OIDs whenever possible."
+    ::= { syncMonitorJitterAnalysisEntry 2 }
+
+syncMonitorJitterAnalysisLocked OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays information about the current jitter measurement PLL status. 
+         Jitter results are not valid until this field value is YES.
+
+         Depending on the jitter analysis settings, the measurement PLL may 
+         need a few seconds to stabilize before the phase readings are correct. 
+         During this time, the PLL locked status will be NO.
+
+         The information displayed by this field is equivalent to the value of 
+         the PLL LED displayed within the LEDs panel."
+    ::= { syncMonitorJitterAnalysisEntry 3 }
+    
+syncMonitorJitterAnalysisAmplitude OBJECT-TYPE
+    SYNTAX            Real32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current peak-to-peak jitter expressed in UIpp and referred to the 
+         configured measurement band ('lp', 'hp1andlp', 'hp2andlp', 'rmsandlp' 
+         filters) and integration period."
+    ::= { syncMonitorJitterAnalysisEntry 4 }
+    
+syncMonitorJitterAnalysisAmplitudeMax OBJECT-TYPE
+    SYNTAX            Real32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This OID stores the maximum value displayed in the 
+         'syncMonitorJitterAnalysisAmplitude' field from the beginning of the 
+         current monitoring session. If there is no active monitoring currently 
+         running, then this field shows the maximum jitter of the last session."
+    ::= { syncMonitorJitterAnalysisEntry 5 }
+
+syncMonitorJitterAnalysisAmplitudeRms OBJECT-TYPE
+    SYNTAX            Real32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Current root mean squared (rms) jitter measured referred to the 
+         configured measurement band ('lp', 'hp1andlp', 'hp2andlp', 'rmsandlp' 
+         filters) and integration period."
+    ::= { syncMonitorJitterAnalysisEntry 6 }
+
+syncMonitorJitterAnalysisHits OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of hit events detected from the beginning of the 
+         monitoring session. A hit is declared every time the jitter amplitude 
+         surpasses the user configurable hit threshold."
+    ::= { syncMonitorJitterAnalysisEntry 7 }
+    
+syncMonitorJitterAnalysisHitsSeconds OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Total number of seconds which contain at least one hit event detected 
+         from the beginning of a test."
+    ::= { syncMonitorJitterAnalysisEntry 8 }
+
+syncMonitorJitterAnalysisStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'syncMonitorJitterAnalysisTable'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { syncMonitorJitterAnalysisEntry 9 }
+    
+END

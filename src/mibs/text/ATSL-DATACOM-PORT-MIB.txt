@@ -1,0 +1,381 @@
+ATSL-DATACOM-PORT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Datacom test port configuration.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus                  FROM SNMPv2-TC
+    atslGeneral, TableIndex, Real32                       FROM ATSL-MIB;
+
+ dataPort MODULE-IDENTITY
+    LAST-UPDATED "201609210000Z" -- 21 September, 2016
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB defines all settings relevant for data communications
+         interfaces.  Datacom ports are usually enabled in the
+         'datacomEndpoint' or 'datacomMonitor' modes defined in the
+         ATSL-TDM-PORT-MIB but it is not intended that data communications
+         ports are specific only of these modes.
+         
+         This MIB is generic and can be used for any synchronous datacom
+         standard but it also includes the extensions required to configure
+         ITU-T V.24 asynchronous interfaces, or even ITU-T G.703
+         co-directional.  Although the co-directional interface doesn't
+         match well the definition of a data communications port, some
+         ALBEDO agents implement these technologies as datacom ports and
+         they are included here for this reason.
+
+         Scalars
+
+         - 'dataPortEnable': Starts / Stops traffic generation in the
+         managed entity.  The action starts generation through all the
+         available blocks.  The number of monitoring blocks may not be the
+         same for different managed entities and it may be that there is
+         only one monitoring block for some of them.
+
+         Tables
+
+         - 'dataPortLineTable': Configures some of the basic physical
+           operation parameters for data communications transmission and
+           reception.  Some of these include emulation mode, bit rate and
+           the clock source.  Some settings may be relevant only for a
+           subset of the supported interfaces.
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - AT-2048 E1 / Datacom Tester.
+        - AT.One T1 / E1 / Datacom Tester.
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+        - Ether10.Genius 10GbE / E1 / Datacom / C37.94 Tester."
+    REVISION     "201609210000Z" -- 21 September, 2016
+    DESCRIPTION
+         "The 'dataPortModeTable' is not supported any more from this MIB.
+          the equivalent functionality is now provided from the
+          'ATSL-TDM-PORT-MIB' through the 'tdmPortModeTable'"
+    REVISION     "201602020000Z" -- 2 February, 2016
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 27 }
+
+--
+-- Top level module structure
+--
+
+dataPortControl      OBJECT IDENTIFIER ::= { dataPort 1 }
+
+--
+-- Transmission enable / disable control group
+--
+
+dataPortEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops traffic generation in the managed entity. The action
+         starts generation through all the available blocks. The number of
+         monitoring blocks may not be the same for different managed entities
+         and it may be that there is only one monitoring block for some of
+         them."
+    ::= { dataPortControl 1 }
+
+--
+--  Datacom line configuration table
+--
+
+dataPortLineTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF DataPortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures some of the basic physical operation parameters for data
+         communications transmission and reception. Some of these include
+         emulation mode, bit rate and the clock source. Some settings may be
+         relevant only for a subset of the supported interfaces."
+    ::= { dataPort 2 }
+
+dataPortLineEntry OBJECT-TYPE
+    SYNTAX            DataPortLineEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         traffic generation block."
+    INDEX { dataPortLineIndex }
+    ::= { dataPortLineTable 1 }
+
+DataPortLineEntry ::= SEQUENCE {
+    dataPortLineIndex             TableIndex,
+    dataPortLineBlockName         DisplayString,
+    dataPortLineEmulationMode     INTEGER,
+    dataPortLineOperationMode     INTEGER,
+    dataPortLineTdClockCircuit    INTEGER,
+    dataPortLineTxClock           INTEGER,
+    dataPortLineTxClockOffset     Real32,
+    dataPortLineRate              INTEGER,
+    dataPortLineRateNFactor       Unsigned32,
+    dataPortLineRateUser          Unsigned32,
+    dataPortLineDataBits          INTEGER,
+    dataPortLineStopBits          INTEGER,
+    dataPortLineParity            INTEGER,
+    dataPortLineInterwordTxGap    Unsigned32,
+    dataPortLineStatus            RowStatus
+}
+
+dataPortLineIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each traffic generation
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { dataPortLineEntry 1 }
+
+dataPortLineBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other capture, filtering or statistics block associated to the same
+         traffic generation block within the same managed device must use the
+         same textual name whenever possible."
+    ::= { dataPortLineEntry 2 }
+
+dataPortLineEmulationMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          dte (0),
+                          dce (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Chooses between DTE or DCE emulation. Available configuration values
+         for this field are:
+        
+         - 'dte': Sets Data Terminal Equipment (DTE) emulation. DTEs are end
+           points in a data communications systems.
+          
+         - 'dce': Sets Data Communications Equipment (DCE) emulation. DCEs are
+           usually modems, routers or equipments with similar capabilities."
+    ::= { dataPortLineEntry 3 }
+
+dataPortLineOperationMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          synchronous (0),
+                          asynchronous (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This setting configures synchronous or asynchronous operation in the
+         V.24 datacom interface:
+         
+         - 'synchronous': Timing information for the DTE and the DCE is sent
+           over dedicated circuits. This circuit can be either the TC or the
+           TTC for data from DTE and the RC for data from the DCE.
+           
+         - 'asynchronous': There is not a timing circuit for the DTE and DCE.
+           The information can be sent at any time."
+    ::= { dataPortLineEntry 4 }
+
+dataPortLineTdClockCircuit OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          ttc (0),
+                          tc (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the timing circuit for the TD circuit. The TD is used to deliver
+         information from the DTE to the DCE. There are two possible
+         configurations for this setting:
+         
+         - 'tc': The TC circuit carries timing generated by the DCE. If TC is
+           set in TD clock circuit, timing and information from the DTE will
+           follow opposite path directions.
+           
+         - 'ttc': The TTC circuit carries timing generated by the DTE. If TTC
+           is set in the TD clock circuit, timing and information from the DTE
+           will follow the same direction.
+           
+         The TD clock circuit setting applies to the V.35, V.36, EIA-530 and
+         EIA-530A interfaces only."
+    ::= { dataPortLineEntry 5 }    
+
+dataPortLineTxClock OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          synthesized (0),
+                          recovered (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Clock source for the transmitter. These are the options available for
+         this setting:
+
+         - 'synthesized': It is used the clock signal internally generated by
+           the agent. The synthesized clock may be synchronized to an external
+           source such as a GPS clock in some agents. This setting can be used
+           to check potential synchronization impairments in the network.
+
+         - 'recovered': The clock signal recovered from the receiver is used by
+           the transmitter of the same port. This setting is used to synchronize
+           the agent with the DUT / SUT. Timing differences between the agent
+           and the DUT / SUT are therefore compensated."
+    ::= { dataPortLineEntry 6 }
+
+dataPortLineTxClockOffset OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "ppm"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        " Frequency offset applied to the transmitter clock. This feature is
+          useful to stress the DUT / SUT."
+    ::= { dataPortLineEntry 7 }
+    
+dataPortLineRate OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          kbpsnx64 (0),
+                          kbpsnx56 (1),
+                          user (2),
+                          bps1200 (3),
+                          bps2400 (4),
+                          bps4800 (5),
+                          bps8000 (7),
+                          bps9600 (8),
+                          bps16000 (9),
+                          bps19200 (10),
+                          kbps32 (11),
+                          kbps48 (12),
+                          kbps72 (13),
+                          kbps128 (14)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the data rate for the currently selected interface. The
+         options available for this setting depend on the actual interface
+         configured. If either 'kbpsnx56' or 'kpbsnx64' are configured, the
+         user is allowed to enter an integer value to configure a multiple
+         of the 56 kb/s or 64 kb/s respectively, through the
+         'dataPortLineRateNFactor' OID. If 'user' is set, then the user
+         has to configure the bit rate in bit/s through
+         'dataPortLineRateUser'."
+    ::= { dataPortLineEntry 8 }
+    
+dataPortLineRateNFactor OBJECT-TYPE
+    SYNTAX            Unsigned32 (1..32)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If you have set 'kbpsnx64' or 'kpbsnx56'' as the Bitrate, this field
+         configures the value of the multiplier factor for the 64 kb/s or
+         56 kb/s rate.
+        
+         The multiplicative factor must be a positive integer value. The
+         maximum allowed value of N depends on the current interface."
+    ::= { dataPortLineEntry 9 }
+    
+dataPortLineRateUser OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "bit/s"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Data transmission rate in bit/s. This setting is only available if
+         'dataPortLineRate' field has been configured to 'user'."
+    ::= { dataPortLineEntry 10 }    
+
+dataPortLineDataBits OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          bits5 (0),
+                          bits6 (1),
+                          bits7 (2),
+                          bits8 (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Data bits per each V.24 asynchronous frame. It can be 5, 6, 7, 8
+         bits. This setting applies only to V.24 operating in asynchronous
+         mode."
+    ::= { dataPortLineEntry 11 }
+    
+dataPortLineStopBits OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          bits1 (0),
+                          bits15 (1),
+                          bits2 (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Stop bits for V.24 asynchronous frames. The available values are
+         1, 1.5 and 2 bits. This setting applies to V.24 interfaces
+         operating in asynchronous mode only."
+    ::= { dataPortLineEntry 12 }
+    
+dataPortLineParity OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          none (0),
+                          even (1),
+                          odd (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Presence and type of parity for V.24 asynchronous frames. The
+         available values are None, Even or Odd. This setting applies to V.24
+         interfaces operating in asynchronous mode only."
+    ::= { dataPortLineEntry 13 }
+    
+dataPortLineInterwordTxGap OBJECT-TYPE
+    SYNTAX            Unsigned32 (0..29)
+    UNITS             "half-bits"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Inter-word separation in V.24 asynchronous interface, in number of
+        half bits. The generator will space contiguous data words for a time
+        interval equivalent to this number of half bits at the configured
+        bit rate."
+    ::= { dataPortLineEntry 14 }    
+
+dataPortLineStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for 'dataPortLineTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations
+         if the status column is set to something different to 'active'. See
+         the REFERENCEd documents to get more information about the encoding
+         and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { dataPortLineEntry 15 }
+
+END

@@ -1,0 +1,2014 @@
+ATSL-FILTER-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Ethernet / IP packet selection and filtering.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus, MacAddress                                 FROM SNMPv2-TC
+    InetAddressIPv4, InetAddressIPv6                      FROM INET-ADDRESS-MIB
+    atslGeneral, TableIndex, Word16,
+    VlanIdentifier, PriorityCodePoint, DiffServCodePoint  FROM ATSL-MIB;
+
+ pktFilter MODULE-IDENTITY
+    LAST-UPDATED "201303140000Z" -- 14 March, 2013
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module supplies packet selection and filtering rules valid
+         for Ethernet and IP networks. The sequence of packets matching the
+         rules of one or several filters constitutes a traffic flow.
+         Destination of traffic flows is not defined by this MIB module.
+         Traffic flows can be sent to an statistics generation block, a file in
+         an storage device or they can be dropped to a networkinterface.
+
+         The structure of the MIB module is made up of several different
+         configuration tables. Specifically, the current MIB module provides
+         support of the following packet selection and filtering tables:
+
+        - 'pktFilterControlTable': This table is at disposal of the managed
+          device to enable or disable specific filtering blocks by means the
+          'pktFilterControlEnable' column available in the table. Disabled
+          filters block all traffic, i.e. no traffic is allowed to pass
+          through the filter. If the filtering block is enabled ('active'), then
+          packets may pass through the filter if they match the filtering rules
+          currently specified for the corresponding tables. Filters are also
+          allowed to be controlled by an external application. The
+          'applicationControlled' filters are managed in the same way that
+          blocked filters.
+          
+        - 'pktFilterTable': Filter configuration table that contains several
+          protocol-independent filtering rules such as filter by packet length,
+          by arbitrary bit pattern within a fixed position in the packet or by
+          fixed ASCII pattern within a variable position in the packet.
+          Tipically, the protocol-independent filtering rules are used if there
+          is not a protocol-specific matching rule availablefor the desired
+          application.
+
+        - 'pktFilterMacTable': Filters traffic by source and destination MAC
+          address. Filtering by Ethertype value is supported as well.
+          Users are allowed to configure a filtering mask for all the
+          accepted filtered fields. Masks are useful when it is wanted to use
+          a single filter to match several values of the MAC addresses or
+          Ethertype.
+
+        - 'pktFilterVlanTable': Table that configures filters based on VLANs.
+          Both the VLAN identifier (VID) and the priority codepoint (PCP) are
+          accepted as valid fields to build matching rules. The same table can
+          be used if the packet contains stacked VLAN tags (Q-in-Q / IEEE
+          802.1ad formats). In this case, there are separate filtering
+          rules for the C-VID and the S-VID (or the C-PCP and the S-PCP). There
+          is a filtering rule for the drop-eligible indicator bit included in
+          the S-VLAN tag.
+        
+        - 'pktFilterIpv4Table': This table can be used to configure
+          filtering rules operating over the IPv4 protocol. Fields currently
+          accepted to generate matching rules are the IPv4 source and
+          destination addresses, the 'protocol' field, and the differentiated
+          sevices codepoint (DSCP). For the source and destination IPv4
+          addresses, the user is allowed to configure filtering masks. Masks are
+          useful when it is wanted to use a single filter to match several
+          values of the IPv4 source or destination addresses.
+
+        - 'pktFilterIpv6Table': Configures filtering rules for the IPv6
+	  protocol. Fields currently accepted to generate matching rules are the
+          IPv6 source and destination addresses, the 'next header' field, the
+          differentiated services codepoint (DSCP) and the 'flow label'. For
+	  the source and destination IPv6 addresses the user is allowed to
+	  configure filtering masks. Masks are useful when it is wanted to use
+          a single filter to match several values of the same field.
+        
+        - 'pktFilterL4Table': Table used to match specific source and
+          destination UDP / TCP ports (or both at the same time). This table
+          can be used both to match specific ports or port ranges between a
+          minimum and maximum port.
+
+        Two or more of these tables may be applied to the same filtering block.
+        The block to which the filters apply is designated with the help of a
+        stream name column. It is expected that all table entries referred to
+        the same blocked  will have the same stream name.
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - Net.Storm GbE Impairment Generator.
+        - Net.Shark GbE Filtering and Aggregation Tap.
+        - Net.Hunter Network Capture Device.
+        - Ether.Giga Gigabit Ethernet Tester.  
+        - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester."
+    REVISION     "201303140000Z" -- 14 March, 2013
+    DESCRIPTION
+	"Added compatibility with IPv6 through the 'pktFilterIpv6Table'."
+    REVISION     "201302010000Z" -- 01 Feburary, 2013
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 11 }
+
+--
+-- Textual conventions
+--
+
+FilterMode ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the available operation modes for a filtering block. Currently,
+         there are three different accepted operation modes:
+
+         - 'blocked': The filtering block does not accept packets. No packet is
+           allowed to pass through the filter.
+
+         - 'available': Filtered packets are allowed to pass through the filter
+           if they match the rules currently configured for the block.
+
+         - 'applicationControlled': Packet matching is not controlled by the
+           tables defined in this MIB module. Filter operation is left to an
+           external application. This application can theoretically configure
+           the filtering block at its convenience. For all the purposes of this
+           MIB module,a filtering block controlled by an application operates in
+           the same way that a blocked filter."
+    SYNTAX            INTEGER {
+                          blocked (0),
+                          available (1),
+                          applicationControlled (2)
+                      }
+
+MatchString ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT       "32a"
+    STATUS             current
+    DESCRIPTION
+        "Describes an 8-bit encoded text string of up to 32 bytes long. This is
+         the type of screen that can be used as a matching pattern for a
+         fixed-pattern, variable-offset filtering block."
+    SYNTAX OCTET STRING (SIZE (0..32))
+
+--
+--  Filter control configuration table
+--
+
+pktFilterControlTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterControlEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table is at disposal of the managed device to enable or
+         disable specific filtering blocks by means the 'pktFilterControlEnable'
+         column available in the table. Disabled filters block all traffic, i.e.
+         no traffic is allowed to pass through the filter. If the filtering
+         block is enabled ('active'), then packets may pass through the filter
+         if they match the  filtering rules currently specified for the
+         corresponding tables. Filters are also allowed to be controlled by an
+         external application. The 'applicationControlled' filters are managed
+         in the same way that blocked filters."
+    ::= { pktFilter 1 }
+
+pktFilterControlEntry OBJECT-TYPE
+    SYNTAX            PktFilterControlEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to a particular
+         filtering block."
+    INDEX { pktFilterControlIndex }
+    ::= { pktFilterControlTable 1 }
+
+PktFilterControlEntry ::= SEQUENCE {
+    pktFilterControlIndex         TableIndex,
+    pktFilterControlStreamName    DisplayString,
+    pktFilterControlMode          FilterMode,
+    pktFilterControlStatus        RowStatus
+}
+
+pktFilterControlIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each filter control block,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { pktFilterControlEntry 1 }
+
+pktFilterControlStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an
+         interface text name, such as 'eth0' or a stream identifier such as
+         'eth0.0' depending on the capabilities available in the managed
+         entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { pktFilterControlEntry 2 }
+
+pktFilterControlMode OBJECT-TYPE
+    SYNTAX            FilterMode
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables / Disables filtering in the current filtering block.
+         Disabled filters block all traffic, i.e. no traffic is allowed
+         to pass through the filter. If the filtering block is enabled, then
+         packets may pass through the filter if they match the filtering 
+         rules currently specified for the table. Filters are also allowed
+         to be controlled by an external application. The application
+         controlled' filters are managed in the same way that blocked 
+         filters."
+    ::= { pktFilterControlEntry 3 }
+
+pktFilterControlStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterControlTable'. Enables dynamic
+         creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCEd documents to get more
+         information about the ancoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterControlEntry 4 }
+
+--
+--  Generic packet filtering configuration table
+--
+
+pktFilterTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Filter configuration table that contains several protocol-independent
+         filtering rules such as filter by packet length, by arbitrary bit
+         pattern within a fixed position in the packet or by fixed ASCII pattern
+         within a variable position in the packet. Tipically, the
+         protocol-independent filtering rules are used if there is not a
+         protocol-specific matching rule available for application."
+    ::= { pktFilter 2 }
+
+pktFilterEntry OBJECT-TYPE
+    SYNTAX            PktFilterEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing protocol-independent filtering rules
+         applicable to a particular filtering block."
+    INDEX { pktFilterIndex }
+    ::= { pktFilterTable 1 }
+
+PktFilterEntry ::= SEQUENCE {
+    pktFilterIndex                TableIndex,
+    pktFilterStreamName           DisplayString,
+    pktFilterOffsetMode           INTEGER,
+    pktFilterPayload              INTEGER,
+    pktFilterOffset               Unsigned32,
+    pktFilterOffsetMatchCode      Word16,
+    pktFilterOffsetMask           Word16,
+    pktFilterLengthMode           INTEGER,
+    pktFilterLengthMin            Unsigned32,
+    pktFilterLengthMax            Unsigned32,
+    pktFilterPatternMode          INTEGER,
+    pktFilterPattern              MatchString,
+    pktFilterStatus               RowStatus
+}
+
+pktFilterIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each generic filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterEntry 1 }
+
+pktFilterStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an
+         interface text name, such as 'eth0' or a stream identifier such as
+         'eth0.0' depending on the capabilities available in the managed
+         entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { pktFilterEntry 2 }
+
+pktFilterOffsetMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables / disables fixed offset packet filtering in the current
+         filter. The value configured here is used to determine which packets
+         are allowed to pass through the filter and which ones are blocked.
+         The available configuration values for this object are:
+
+          - 'ignore': Fixed-offset matching is ignored and not taken into
+            account for the purpose of the filter. All packets are allowed
+            to pass through the filter when 'pktFilterOffsetMode' is configured
+            to 'ignore' if they are not blocked by other selection rule.
+
+          - 'equalWithMask': All packets matching a user configurable pattern
+            are allowed to pass through the filter. The matching pattern is
+            configured with the help of the 'pktFilterPayload',
+            'pktFilterOffset' and 'pktFilterOffsetMask' objects in this table."
+    ::= { pktFilterEntry 3 }
+
+pktFilterPayload OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          wholeFrame(0),
+                          mac(1),
+                          ipv4(2),
+                          ipv6(3),
+                          udp(4),
+                          tcp(5)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Defines the payload type and the reference point within the packet to
+         start counting the filter offset. The reference can be the beginning
+         of the MAC, IPv4, IPv6, UDP or TCP payload depending on the chosen value.
+         It is also possible to set the reference to the beginning of the
+         Ethernet packet (first byte immediately after the SDF) by configuring
+         'pktFilterPayload' to 'wholeFrame'."
+    ::= { pktFilterEntry 4 }
+
+
+pktFilterOffset OBJECT-TYPE 
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This field defines the offset expressed in bytes from the reference
+         point defined with 'pktFilterPayload'. The value 0 corresponds
+         with the first byte of the MAC, IPv4, UDP or TCP payload (or the
+         first packet byte, if 'pktFilterPayload' is set to 'wholeFrame').
+
+         If due to the limited packet size, some or all the byte positions
+         defined by 'pktFilterOffset', do not exist in the corresponding
+         payload, the managed entity should consider that the packet does
+         not match the filtering rule."
+    ::= { pktFilterEntry 5 }
+
+pktFilterOffsetMatchCode OBJECT-TYPE 
+    SYNTAX            Word16
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "16-bit code expressed with four hexadecimal digits used to match
+         packets in the current filter."
+    ::= { pktFilterEntry 6 }
+
+pktFilterOffsetMask OBJECT-TYPE 
+    SYNTAX            Word16
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a mask for the generic filter match code. Before comparing
+         the match code with the selected bytes in the Ethernet packet, bit
+         wise 'AND' operations are carried out between the value configured
+         here and  the match code field so that only the values surviving the
+         'AND' are taken into account for matching packets."
+    ::= { pktFilterEntry 7 }
+
+
+pktFilterLengthMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          inRange (1),
+                          outOfRange (2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables length selection in the current filtering block: The value
+         configured here is used to determine which packets are allowed to pass
+         through the filter and which ones are blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': Length matching is ignored and not taken into account for
+           the purpose of the filter. All packets are allowed to pass through
+           the filter when Ignore is configured if they are not blocked by
+           other selection rules.
+
+         - 'inRange': All packets with a size between a minimum and a maximum
+           length are allowed to pass through the filter. The length range is
+           specified with the help of the 'pktFilterLengthMin' and
+           'pktFilterLengthMax' fields.
+
+         - 'outOfRange': All packets with a size not between a configurable
+           length range are allowed to pass through the filter. The length range
+           is specified with the help of the 'pktFilterLengthMin' and
+           'pktFilterLengthMin' fields."
+    ::= { pktFilterEntry 8 }
+
+pktFilterLengthMin OBJECT-TYPE 
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Minimum packet size in the length range configured for the 'inRange'
+         and 'outOfRange' filter modes."
+    ::= { pktFilterEntry 9 }
+
+pktFilterLengthMax OBJECT-TYPE 
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Maximum packet size in the length range configured for the 'inRange'
+         and 'outOfRange' filter modes."
+    ::= { pktFilterEntry 10 }
+
+pktFilterPatternMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables fixed pattern selection in the current filter. The value
+         configured here is used to determine which frames are allowed to pass
+         through the filter and which ones are blocked. The available      
+         configuration values for this field are:
+
+         - 'ignore': Fixed pattern matching is ignored and not taken into
+           account for the purpose of the filter. All frames are allowed to pass
+           through the filter when Ignore is configured if they are not blocked
+           by other selection rule.
+
+         - 'equalWithMask': All frames matching a user configurable pattern are
+           allowed to pass through the filter. The matching pattern is
+           configured with the help of 'pktFilterPattern'."
+    ::= { pktFilterEntry 11 }
+
+pktFilterPattern OBJECT-TYPE 
+    SYNTAX            MatchString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This object contains the text pattern to be matched in the Fixed
+         pattern search. The pattern is specified as an ASCII encoded text
+         string. In this string, some characters and character combinations
+         have special meanings:
+
+         - '?': This code matches any ASCII character, for example, the 'AB?D'
+           matches 'ABCD', 'ABzD' or 'AB%D'. To match the '?', the '?' symbol
+           is escaped with '\'. For example, 'AB\?D' matches 'AB?D' but not
+           'ABzD' and not 'AB\?D' and not 'AB\zD'.
+
+         - '\': This is the escape character. The combinations '\?', and '\\'
+           restore the '?' and '\' their original meanings. Any alphabetic
+           character can be escaped if it is wanted to ignore its case. For
+           example, 'A\bCD' matches both 'ABCD' and 'AbCD'. '\A\B\c\D' matches
+           'ABCD', 'ABCd', 'ABcD', 'abcd' and any possible combination of
+           the upper case and lower case 'A', 'B', 'C' and 'D' letters."
+    ::= { pktFilterEntry 12 }
+
+pktFilterStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterTable'. Enables dynamic creation/
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterEntry 13 }
+
+--
+--  Ethernet MAC packet filtering configuration table
+--
+
+pktFilterMacTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterMacEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Filters traffic by source and destination MAC address. Filtering by
+         Ethertype value is supported as well. Users are allowed to configure
+         a filtering mask for all the accepted filtered fields. Masks are
+        useful when it is wanted to use a single filter to match several
+        values of the MAC addresses or Ethertype."
+    ::= { pktFilter 3 }
+
+pktFilterMacEntry OBJECT-TYPE
+    SYNTAX            PktFilterMacEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing MAC packet filtering rules applicable to
+         a particular filtering block."
+    INDEX { pktFilterMacIndex }
+    ::= { pktFilterMacTable 1 }
+
+PktFilterMacEntry ::= SEQUENCE {
+    pktFilterMacIndex             TableIndex,
+    pktFilterMacStreamName        DisplayString,
+    pktFilterMacSrcAddressMode    INTEGER,
+    pktFilterMacSrcAddress        MacAddress,
+    pktFilterMacSrcAddressMask    MacAddress,
+    pktFilterMacDstAddressMode    INTEGER,
+    pktFilterMacDstAddress        MacAddress,
+    pktFilterMacDstAddressMask    MacAddress,
+    pktFilterMacEthertypeMode     INTEGER,
+    pktFilterMacEthertype         Word16,
+    pktFilterMacEthertypeMask     Word16,
+    pktFilterMacStatus            RowStatus
+}
+
+pktFilterMacIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each MAC packet filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterMacEntry 1 }
+
+pktFilterMacStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an
+         interface text name, such as 'eth0' or a stream identifier such as
+         'eth0.0' depending on the capabilities available in the managed
+         entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { pktFilterMacEntry 2 }
+
+pktFilterMacSrcAddressMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by source MAC address in the current filter. The
+         value configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': The source MAC address is ignored and not taken into
+           account for the purpose of the filter. All packets are allowed to
+           pass through the filter when 'ignore' is configured if they are not
+           blocked by other selection rule.
+
+         - 'equalWithMask': All packets matching a user configurable pattern are
+           allowed to pass through the filter. The matching pattern is
+           configured with the help of 'pktFilterMacSrcAddress' and
+           'pktFilterMacSrcAddressMask'."
+    ::= { pktFilterMacEntry 3 }
+
+pktFilterMacSrcAddress OBJECT-TYPE 
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a 48-bit MAC address in the standard hexadecimal digit
+         format XX:XX:XX:XX:XX:XX. Source addresses matching some or all
+         bits of the address configured here will be allowed to pass through
+         the filter. Bits used for  matching packets in this filter are
+         configured by means 'pktFilterMacSrcAddressMask'."
+    REFERENCE 
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { pktFilterMacEntry 4 }
+
+pktFilterMacSrcAddressMask OBJECT-TYPE 
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the source MAC address filter selection rule.
+         Before comparing the value configured in 'pktFilterMacSrcAddress'
+         with the actual MAC addresses, bit wise 'AND' operations are carried
+         out between the value configured here and the address configured in
+         'pktFilterMacSrcAddress' so that only the values surviving the
+         'AND' are taken into account for matching packets."
+    ::= { pktFilterMacEntry 5 }
+
+pktFilterMacDstAddressMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by destination MAC address in the current
+         filter. The value configured here is used to determine which
+         packets are allowed to pass through the filter and which ones
+         are blocked. The available configuration values for this field
+         are:
+
+         - 'ignore': The destination MAC address is ignored and not taken
+           into account for the purpose of the filter. All packets are
+           allowed to pass through the filter when 'ignore' is
+           configured if they are not blocked by other selection rule.
+
+         - 'equalWithMask': All packets matching a user configurable
+           pattern are allowed to pass through the filter. The 
+           matching pattern is configured with the help of
+           'pktFilterMacDstAddress' and 'pktFilterMacDstAddressMask'."
+    ::= { pktFilterMacEntry 6 }
+
+pktFilterMacDstAddress OBJECT-TYPE 
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a 48-bit MAC address in the standard hexadecimal
+         digit format XX:XX:XX:XX:XX:XX. Destinationaddresses matching
+         some or all bits of the address configured here will be
+         allowed to pass through the filter. Bits used for
+         matching packets in this filter are configured by means
+         'pktFilterMacDstAddressMask'."
+    REFERENCE 
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { pktFilterMacEntry 7 }
+
+pktFilterMacDstAddressMask OBJECT-TYPE 
+    SYNTAX            MacAddress
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the destination MAC address filter selection
+         rule. Before comparing the value configured in 'pktFilterMacDstAddress'
+         with the actual MAC addresses, bit wise 'AND' operations are
+         carried out between the value configured here and the address
+         configured in 'pktFilterMacDstAddress' so that only the values
+         surviving the 'AND' are taken into account for matching packets."
+    ::= { pktFilterMacEntry 8 }
+
+pktFilterMacEthertypeMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by Ethertype value in the current filter. The value
+         configured here is used to determine which packets are allowed to pass
+         through the filter and which ones are  blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': The Ethertype is ignored and not taken into account for the
+           purpose of the filter. All packets are allowed to pass through the
+           filter when 'ignore' is configured if they are not blocked by other
+           selection rule.
+
+         - 'equalWithMask': All packets matching a user configurable Ethertype
+           pattern are allowed to pass through the filter. The matching pattern
+           is configured with the help of 'pktFilterMacEthertype' and
+           'pktFilterMacEthertypeMask'."
+    ::= { pktFilterMacEntry 9 }
+
+pktFilterMacEthertype OBJECT-TYPE 
+    SYNTAX            Word16
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This setting contains a 2-byte field that constitutes the
+         Ethertype value to be matched in the incoming traffic. 
+         Ethertypes matching some or all bytes of the value configured
+         here will be allowed to pass through the filter. Bits used for
+         matching packets to this filter are configured by means the
+         Ethertype mask."
+    REFERENCE 
+        "- IEEE Std. 802.3-2008 'Part 3: Carrier sense multiple access with
+           Collision Detection (CSMA/CD) Access Method and Physical Layer
+           Specifications."
+    ::= { pktFilterMacEntry 10 }
+
+pktFilterMacEthertypeMask OBJECT-TYPE 
+    SYNTAX            Word16
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the Ethertype filter selection rule.
+         Before comparing the Ethertype field with the packet Ethertype,
+         bit wise 'AND' operations are carried out between the value
+         configured here and the Ethertype field so that only the values
+         surviving the 'AND' are taken into account for matching the
+         filter."
+    ::= { pktFilterMacEntry 11 }
+
+pktFilterMacStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterMacTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information
+         contained in the table entry may not be available for read / write
+         operations if the status column is set to something different
+         to 'active'.  See the REFERENCEd documents to get more information
+         about the ancoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterMacEntry 12 }
+
+--
+--  VLAN filtering configuration table
+--
+
+pktFilterVlanTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterVlanEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table that configures filters based on VLANs. Both the VLAN
+         identifier (VID) and the priority codepoint (PCP) are accepted as
+         valid fields to build matching rules. The same table can be used if
+         the packet contains stacked VLAN tags (Q-in-Q / IEEE 802.1ad
+         formats). In this case, there are separate filtering rules for the
+         C-VID and the S-VID (or the C-PCP and the S-PCP). There is a 
+         filtering rule for the drop-eligible indicator bit included in the
+         S-VLAN tag."
+    ::= { pktFilter 4 }
+
+pktFilterVlanEntry OBJECT-TYPE
+    SYNTAX            PktFilterVlanEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing VLAN packet filtering rules applicable
+         to a particular filtering block."
+    INDEX { pktFilterVlanIndex }
+    ::= { pktFilterVlanTable 1 }
+
+PktFilterVlanEntry ::= SEQUENCE {
+    pktFilterVlanIndex            TableIndex,
+    pktFilterVlanStreamName       DisplayString,
+    pktFilterVlanCvidMode         INTEGER,
+    pktFilterVlanCvid             VlanIdentifier,
+    pktFilterVlanCpcpMode         INTEGER,
+    pktFilterVlanCpcp             PriorityCodePoint,
+    pktFilterVlanSvidMode         INTEGER,
+    pktFilterVlanSvid             VlanIdentifier,
+    pktFilterVlanSpcpMode         INTEGER,
+    pktFilterVlanSpcp             PriorityCodePoint,
+    pktFilterVlanDeiMode          INTEGER,
+    pktFilterVlanDei              TruthValue,
+    pktFilterVlanStatus           RowStatus
+}
+
+pktFilterVlanIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each VLAN packet filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterVlanEntry 1 }
+
+pktFilterVlanStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { pktFilterVlanEntry 2 }
+
+pktFilterVlanCvidMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by VID / C-VID in the current filter. The value
+         configured here is used to determine which packets are allowed to pass
+         through the filter and which ones are blocked. The available       
+         configuration values for this field are:
+
+         - 'ignore': The VID / C-VID is ignored and not taken into account for
+           the purpose of the filter. All packets are allowed to pass through
+           the filter when Ignore is configured if they are not blocked by
+           other selection rule.
+
+         - 'equal': All packets matching a particular VLAN value are allowed to
+           pass through the filter. The matching VID / C-VID is configured with
+           the help of the 'pktFilterVlanCvid'."
+    ::= { pktFilterVlanEntry 3 }
+
+pktFilterVlanCvid OBJECT-TYPE 
+    SYNTAX            VlanIdentifier
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This setting contains a 10-bit identifier that constitutes the VID
+         value to be matched in the incoming traffic. This value is valid both
+         as the VID assigned  to tagged packets (IEEE 802.1Q) or as the C-VLAN
+         identifier for double tagged packets (IEEE 802.1ad, Q-in-Q). In packets
+         with two VLAN tags, the C-VID in packets containing two VLAN tags
+         usually accounts for the VLAN structure corresponding to the customer
+         network."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { pktFilterVlanEntry 4 }
+
+pktFilterVlanCpcpMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by priority codepoint (PCP or C-PCP) in the current
+         filter. The value configured here is used to determine which packets
+         are allowed to pass through the filter and which ones are blocked.
+
+        The available configuration values for this field are:
+
+         - 'ignore': The PCP / C-PCP is ignored and not taken into account for
+           the purpose of the filter. All packets are allowed to pass through
+           the filter when Ignore is configured if they are not blocked by
+           other selection rule.
+
+         - 'equal': All packets matching a particular PCP / C-PCP pattern are
+           allowed to pass through the filter. The matching pattern is
+           configured with the help of the 'pktFilterVlanCpcp'."
+    ::= { pktFilterVlanEntry 5 }
+
+pktFilterVlanCpcp OBJECT-TYPE 
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "3-bit class of service (CoS) field defined to set packet groups with
+         different priorities or to provide specific treatments to special     
+         packets within a network or an administrative domain. This label is   
+         carried by the Q-tag of Ethernet packets with a single tag or by the   
+         C-tag of Ethernet packets with two tags."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { pktFilterVlanEntry 6 }
+
+pktFilterVlanSvidMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by S-VID in the current filter. The value configured
+         here is used to determine which packets are allowed to pass through the
+         filter and which ones are blocked. The available configuration values
+         for this field are:
+
+         - 'ignore': The S-VID is ignored and not taken into account for the
+           purpose of the filter. All packets are allowed to pass through
+           the filter when Ignore is configured if they are not blocked by
+           other selection rule.
+
+         - 'equal': All packets matching a user configurable S-VID value are
+           allowed to pass through the filter. The matching S-VID is configured
+           with the help of the 'pktFilterVlanSvid'."
+    ::= { pktFilterVlanEntry 7 }
+
+pktFilterVlanSvid OBJECT-TYPE 
+    SYNTAX            VlanIdentifier
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This setting contains a 10-bit identifier that constitutes the S-VID
+         value to be matched in the incoming traffic. The S-VID is the VLAN
+         identifier assigned to the S-tag in double tagged packets (IEEE        
+         802.1ad, Q-in-Q). In packets with two VLAN tags, the S-VID usually    
+ 
+         accounts for the VLAN structure corresponding to the service provider  
+         network."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { pktFilterVlanEntry 8 }
+
+pktFilterVlanSpcpMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by priority codepoint (S-PCP) in the current filter.
+         The value configured here is used to determine which packets are
+         allowed to pass through the filter and which ones are blocked.
+
+        The available configuration values for this field are:
+
+         - 'ignore': The S-PCP is ignored and not taken into account for the
+           purpose of the filter. All packets are allowed to pass through the
+           filter when Ignore is configured if they are not blocked by other
+           selection rule.
+
+         - 'equal': All packets matching a particular S-PCP value are allowed
+           to pass through the filter. The matching pattern is configured with
+           the help of the 'pktFilterVlanSpcp'."
+    ::= { pktFilterVlanEntry 9 }
+
+pktFilterVlanSpcp OBJECT-TYPE 
+    SYNTAX            PriorityCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "3-bit class of service (CoS) field defined to set packet groups with
+         different priorities or to provide specific treatments to special
+         packets within a network or an administrative domain. This label is
+         carried by the S-tag (service provider tag) of Ethernet packets with
+         two tags."
+    REFERENCE 
+        "- IEEE Std. 802.1Q-2005 'Virtual Bridged Local Area Networks.
+
+         - IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { pktFilterVlanEntry 10 }
+
+pktFilterVlanDeiMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by drop-eligible indicator (DEI) value in the current
+         filter. The value configured here is used to determine which packets
+         are allowed to pass through the filter and which ones are blocked. The
+         available configuration values for this field are:
+
+         - 'ignore': The DEI is ignored and not taken into account for the
+           purpose of the filter. All packets are allowed to pass through the
+           filter when Ignore is configured if they are not blocked by other
+           selection rule.
+
+         - 'equal': All packets matching a particular DEI value are allowed
+           to pass through the filter. The matching pattern is configured with
+           the help of the 'pktFilterVlanSpcp'."
+    ::= { pktFilterVlanEntry 11 }
+
+pktFilterVlanDei OBJECT-TYPE 
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a single bit field that is used to mark drop eligible packets.
+         These packets are usually dropped first when congestion is detected in
+         a network node.
+
+         The Drop eligible operator is carried within the S-tag of IEEE 802.1ad
+         packets."
+    REFERENCE 
+        "- IEEE Std. 802.1ad-2005 'Virtual Bridged Local Area Networks.
+           Amendment 4: Provider Bridges."
+    ::= { pktFilterVlanEntry 12 }
+
+pktFilterVlanStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterVlanTable'. Enables dynamic creation /
+         deletion of table entries in the current table.  Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterVlanEntry 13 }
+
+--
+--  IPv4 filtering configuration table
+--
+
+pktFilterIpv4Table OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterIpv4Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table can be used to configure filtering rules operating over the
+         IPv4 protocol. Fields currently accepted to generate matching rules are
+         the IPv4 source and destination addresses, the protocol field, and the
+         differentiated sevices codepoint (DSCP). For the source and destination
+         IPv4 addresses, the user is allowed to configure filtering masks. Masks
+         are useful when it is wanted to use a single filter to  match several
+         values of the IPv4 source or destination addresses."
+    ::= { pktFilter 5 }
+
+pktFilterIpv4Entry OBJECT-TYPE
+    SYNTAX            PktFilterIpv4Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing IPv4 packet filtering rules applicable to a
+         particular filtering block."
+    INDEX { pktFilterIpv4Index }
+    ::= { pktFilterIpv4Table 1 }
+
+PktFilterIpv4Entry ::= SEQUENCE {
+    pktFilterIpv4Index            TableIndex,
+    pktFilterIpv4StreamName       DisplayString,
+    pktFilterIpv4SrcAddressMode   INTEGER,
+    pktFilterIpv4SrcAddress       InetAddressIPv4,
+    pktFilterIpv4SrcAddressMask   InetAddressIPv4,
+    pktFilterIpv4DstAddressMode   INTEGER,
+    pktFilterIpv4DstAddress       InetAddressIPv4,
+    pktFilterIpv4DstAddressMask   InetAddressIPv4,
+    pktFilterIpv4ProtocolMode     INTEGER,
+    pktFilterIpv4Protocol         Unsigned32,
+    pktFilterIpv4DiffServMode     INTEGER,
+    pktFilterIpv4DiffServ         DiffServCodePoint,
+    pktFilterIpv4Status           RowStatus
+}
+
+pktFilterIpv4Index OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each IPv4 packet filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterIpv4Entry 1 }
+
+pktFilterIpv4StreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { pktFilterIpv4Entry 2 }
+
+pktFilterIpv4SrcAddressMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by source IPv4 address in the current filter. The
+         value configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': The source IP address is ignored and not taken into account
+           for the purpose of the filter. All packets are allowed to pass
+           through the filter when 'ignore' is configured if they are not
+           blocked by other selection rule.
+
+        - 'equalWithMask': All packets matching a user configurable pattern are
+          allowed to pass through the filter. The matching pattern is configured
+          with the help of 'pktFilterIpv4SrcAddress' and
+          'pktFilterIpv4SrcAddressMask' objects."
+    ::= { pktFilterIpv4Entry 3 }
+
+pktFilterIpv4SrcAddress OBJECT-TYPE 
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a 32-bit IPv4 address in the standard four-dotted decimal
+         format A.B.C.D. Source addresses matching some or all bits of the
+         address configured here will be allowed to pass through the filter.
+         Bits used for matching packets to this filter are configured by
+         means 'pktFilterIpv4SrcAddressMask'."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { pktFilterIpv4Entry 4 }
+
+pktFilterIpv4SrcAddressMask OBJECT-TYPE 
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the source IPv4 address filter selection rule.
+         Before comparing the 'pktFilterIpv4SrcAddress' field with the
+         actual IPv4 addresses, bit wise 'AND' operations are carried out
+         between the value configured here and the Source address field so that
+         only the values surviving the 'AND' are taken into account for matching
+         addresses."
+    ::= { pktFilterIpv4Entry 5 }
+
+pktFilterIpv4DstAddressMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by destination IPv4 address in the current filter.
+         The value configured here is used to determine which packets are
+	 allowed to pass through the filter and which ones are blocked.
+         The available configuration values for this field are:
+
+         - 'ignore': The destination IP address is ignored and not taken into
+           account for the purpose of the filter. All packets are allowed to
+	   pass through the filter when 'ignore' is configured if they are not
+           blocked by other selection rule.
+
+        - 'equalWithMask': All packets matching a user configurable pattern are
+          allowed to pass through the filter. The matching pattern is configured
+          with the help of 'pktFilterIpv4SrcAddress' and
+          'pktFilterIpv4SrcAddressMask' objects."
+    ::= { pktFilterIpv4Entry 6 }
+
+pktFilterIpv4DstAddress OBJECT-TYPE 
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a 32-bit IPv4 address in the standard four-dotted decimal
+         format A.B.C.D. Destination addresses matching some or all bits of the
+         address configured here will be allowed to pass through the filter.
+         Bits used for matching packets to this filter are configured by
+         means 'pktFilterIpv4DstAddressMask'."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { pktFilterIpv4Entry 7 }
+
+pktFilterIpv4DstAddressMask OBJECT-TYPE 
+    SYNTAX            InetAddressIPv4
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the destination IPv4 address filter selection
+         rule. Before comparing the 'pktFilterIpv4DstAddress' field with the
+         actual IPv4 addresses, bit wise 'AND' operations are carried out
+         between the value configured here and 'pktFilterIpv4DstAddress' so that
+         only the values surviving the 'AND' are taken into account for matching
+         addresses."
+    ::= { pktFilterIpv4Entry 8 }
+
+pktFilterIpv4ProtocolMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by the 8-bit IPv4 protocol field in the current
+         filter. The value configured here is used to determine which packets
+	 are allowed to pass through the filter and which ones are blocked. The
+         available configuration values for this field are:
+
+         - 'ignore': The 'Protocol' field is ignored and not taken into account
+           for the purpose of the filter. All packets are allowed to pass
+	   through the filter when 'ignore' is configured if they are not
+           blocked by other selection rule.
+
+        - 'equal': All packets matching a user configurable pattern are allowed
+          to pass through the filter. The matching pattern is configured with
+          the help of 'pktFilterIpv4Protocol'."
+    ::= { pktFilterIpv4Entry 9 }
+
+pktFilterIpv4Protocol OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..255)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This object contains an 8-bit word that constitutes the protocol
+         identifier to be matched in the incoming traffic. For example,
+         configuring this object to 17 matches UDP traffic, TCP uses 6 as the
+         protocol number and ICMP uses number 1."
+    REFERENCE 
+        "- RFC 791 'Internet Protocol. DARPA Internet program protocol
+           specification'."
+    ::= { pktFilterIpv4Entry 10 }
+
+pktFilterIpv4DiffServMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by the 6-bit differentiated services code point
+         (DSCP) field in the current filter. The value configured here is used
+         to determine which packets are allowed to pass through the filter and
+         which ones are blocked. The available configuration values for
+         this field are:
+
+         - 'ignore': The DSCP field is ignored and not taken into account for
+           the purpose of the filter. All packets are allowed to pass through
+           the filter when 'ignore' is configured if they are not blocked by
+           other selection rule.
+
+        - 'equal': All packets matching a user configurable pattern are allowed
+          to pass through the filter. The matching pattern is configured with
+          the help of 'pktFilterIpv4Protocol'."
+    ::= { pktFilterIpv4Entry 11 }
+
+pktFilterIpv4DiffServ OBJECT-TYPE 
+    SYNTAX            DiffServCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This object contains a 6-bit word in decimal format that constitutes
+         the DSCP to be matched in the incoming traffic."
+    REFERENCE 
+        "- IETF RFC 2474 'Definition of the Differentiated Services Field (DS
+           Field) in the IPv4 and IPv6 Headers'."
+    ::= { pktFilterIpv4Entry 12 }
+
+pktFilterIpv4Status OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterIpv4Table'. Enables dynamic creation /
+         deletion of table entries in the current table.  Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterIpv4Entry 13 }
+
+--
+--  IPv6 filtering configuration table
+--
+
+pktFilterIpv6Table OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterIpv6Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures filtering rules for the IPv6 protocol. Fields currently
+         accepted to generate matching rules are the IPv6 source and destination
+         addresses, the 'next header' field, the differentiated
+         services codepoint (DSCP) and the 'flow label'. For the source and
+         destination IPv6 addresses the user is allowed to configure filtering
+         masks. Masks are useful when it is wanted to use a single filter to
+         match several values of the same field."
+    ::= { pktFilter 6 }
+
+pktFilterIpv6Entry OBJECT-TYPE
+    SYNTAX            PktFilterIpv6Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing IPv6 packet filtering rules applicable to a
+         particular filtering block."
+    INDEX { pktFilterIpv6Index }
+    ::= { pktFilterIpv6Table 1 }
+
+PktFilterIpv6Entry ::= SEQUENCE {
+    pktFilterIpv6Index            TableIndex,
+    pktFilterIpv6StreamName       DisplayString,
+    pktFilterIpv6SrcAddressMode   INTEGER,
+    pktFilterIpv6SrcAddress       InetAddressIPv6,
+    pktFilterIpv6SrcAddressMask   InetAddressIPv6,
+    pktFilterIpv6DstAddressMode   INTEGER,
+    pktFilterIpv6DstAddress       InetAddressIPv6,
+    pktFilterIpv6DstAddressMask   InetAddressIPv6,
+    pktFilterIpv6NextHeaderMode   INTEGER,
+    pktFilterIpv6NextHeader       Unsigned32,
+    pktFilterIpv6FlowLabelMode    INTEGER,
+    pktFilterIpv6FlowLabel	  Unsigned32,
+    pktFilterIpv6DiffServMode     INTEGER,
+    pktFilterIpv6DiffServ         DiffServCodePoint,
+    pktFilterIpv6Status           RowStatus
+}
+
+pktFilterIpv6Index OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each IPv6 packet filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterIpv6Entry 1 }
+
+pktFilterIpv6StreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { pktFilterIpv6Entry 2 }
+
+pktFilterIpv6SrcAddressMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by source IPv6 address in the current filter. The
+         value configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': The source IP address is ignored and not taken into account
+           for the purpose of the filter. All packets are allowed to pass
+           through the filter when 'ignore' is configured if they are not
+           blocked by other selection rule.
+
+        - 'equalWithMask': All packets matching a user configurable pattern are
+          allowed to pass through the filter. The matching pattern is configured
+          with the help of 'pktFilterIpv6SrcAddress' and
+          'pktFilterIpv6SrcAddressMask' objects."
+    ::= { pktFilterIpv6Entry 3 }
+
+pktFilterIpv6SrcAddress OBJECT-TYPE 
+    SYNTAX            InetAddressIPv6
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a 128-bit IPv6 address in the A:B:C:D:E:F:G:H format, where
+         A, B, C, D, E, F, G and H are hexadecimal numbers between 0000 and
+         ffff. Source addresses matching some or all bits of the address
+	 configured here will be allowed to pass through the filter.
+         Bits used for matching packets to this filter are configured by
+         means 'pktFilterIpv6SrcAddressMask'."
+    REFERENCE 
+        "- RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification."
+    ::= { pktFilterIpv6Entry 4 }
+
+pktFilterIpv6SrcAddressMask OBJECT-TYPE 
+    SYNTAX            InetAddressIPv6
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the source IPv6 address filter selection rule.
+         Before comparing the 'pktFilterIpv6SrcAddress' field with the
+         actual IPv6 addresses, bit wise 'AND' operations are carried out
+         between the value configured here and the Source address field so that
+         only the values surviving the 'AND' are taken into account for matching
+         addresses."
+    ::= { pktFilterIpv6Entry 5 }
+
+pktFilterIpv6DstAddressMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equalWithMask (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by destination IPv6 address in the current filter.
+         The value configured here is used to determine which packets are
+	 allowed to pass through the filter and which ones are blocked.
+         The available configuration values for this field are:
+
+         - 'ignore': The destination IP address is ignored and not taken into
+           account for the purpose of the filter. All packets are allowed to
+	   pass through the filter when 'ignore' is configured if they are not
+           blocked by other selection rule.
+
+        - 'equalWithMask': All packets matching a user configurable pattern are
+          allowed to pass through the filter. The matching pattern is configured
+          with the help of 'pktFilterIpv6SrcAddress' and
+          'pktFilterIpv6SrcAddressMask' objects."
+    ::= { pktFilterIpv6Entry 6 }
+
+pktFilterIpv6DstAddress OBJECT-TYPE 
+    SYNTAX            InetAddressIPv6
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is a 128-bit IPv6 address in the A:B:C:D:E:F:G:H format, where
+         A, B, C, D, E, F, G and H are hexadecimal numbers between 0000 and
+         ffff. Destination addresses matching some or all bits of the address
+	 configured here will be allowed to pass through the filter.
+         Bits used for matching packets to this filter are configured by
+         means 'pktFilterIpv6DstAddressMask'."
+    REFERENCE 
+        "- RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification."
+    ::= { pktFilterIpv6Entry 7 }
+
+pktFilterIpv6DstAddressMask OBJECT-TYPE 
+    SYNTAX            InetAddressIPv6
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the mask for the destination IPv6 address filter selection
+         rule. Before comparing the 'pktFilterIpv6DstAddress' field with the
+         actual IPv6 addresses, bit wise 'AND' operations are carried out
+         between the value configured here and 'pktFilterIpv6DstAddress' so that
+         only the values surviving the 'AND' are taken into account for matching
+         addresses."
+    ::= { pktFilterIpv6Entry 8 }
+
+pktFilterIpv6NextHeaderMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by the 8-bit IPv6 next header field in the current
+         filter. The value configured here is used to determine which packets
+	 are allowed to pass through the filter and which ones are blocked. The
+         available configuration values for this field are:
+
+        - 'ignore': The 'Next header' field is ignored and not taken into
+	  account for the purpose of the filter. All packets are allowed        
+	  to pass through the filter when 'ignore' is configured if they are	
+	  not blocked by other selection rule.
+
+        - 'equal': All packets matching a user configurable pattern are allowed
+          to pass through the filter. The matching pattern is configured with
+          the help of 'pktFilterIpv6Protocol'."
+    ::= { pktFilterIpv6Entry 9 }
+
+pktFilterIpv6NextHeader OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..255)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This object contains an 8-bit word that constitutes the next header
+         identifier to be matched in the incoming traffic. For example,
+         configuring this object to 17 matches UDP traffic, TCP uses 6 as the
+         protocol number and ICMPv6 uses number 58."
+    REFERENCE 
+        "- RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification."
+    ::= { pktFilterIpv6Entry 10 }
+
+
+pktFilterIpv6FlowLabelMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by the 20-bit IPv6 flow label field in the current
+         filter. The value configured here is used to determine which packets
+	 are allowed to pass through the filter and which ones are blocked. The
+         available configuration values for this field are:
+
+        - 'ignore': The 'Flow Label' field is ignored and not taken into
+	  account for the purpose of the filter. All packets are allowed        
+	  to pass through the filter when 'ignore' is configured if they are	
+	  not blocked by other selection rule.
+
+        - 'equal': All packets matching a user configurable pattern are allowed
+          to pass through the filter. The matching pattern is configured with
+          the help of 'pktFilterIpv6FlowLabel'."
+    ::= { pktFilterIpv6Entry 11 }
+
+pktFilterIpv6FlowLabel OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..1048575)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The 'Flow Label' IPv6 field contains a 20-bit word that identifies an
+         unidirectional data flow. These labels are at disposal of intermediate
+         routers for stateful and stateless processing at flow level. For
+         example, the 'Flow Label' could be used to prevent load balancing on a
+         particular traffic flow."
+    REFERENCE 
+        "- RFC 2460 'Internet Protocol. Version 6 (IPv6) Specification."
+    ::= { pktFilterIpv6Entry 12 }
+
+pktFilterIpv6DiffServMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by the 6-bit differentiated services code point
+         (DSCP) field in the current filter. The value configured here is used
+         to determine which packets are allowed to pass through the filter and
+         which ones are blocked. The available configuration values for
+         this field are:
+
+         - 'ignore': The DSCP field is ignored and not taken into account for
+           the purpose of the filter. All packets are allowed to pass through
+           the filter when 'ignore' is configured if they are not blocked by
+           other selection rule.
+
+        - 'equal': All packets matching a user configurable pattern are allowed
+          to pass through the filter. The matching pattern is configured with
+          the help of 'pktFilterIpv4Protocol'."
+    ::= { pktFilterIpv6Entry 13 }
+
+pktFilterIpv6DiffServ OBJECT-TYPE 
+    SYNTAX            DiffServCodePoint
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This object contains a 6-bit word in decimal format that constitutes
+         the DSCP to be matched in the incoming traffic."
+    REFERENCE 
+        "- IETF RFC 2474 'Definition of the Differentiated Services Field (DS
+           Field) in the IPv4 and IPv6 Headers'."
+    ::= { pktFilterIpv6Entry 14 }
+
+pktFilterIpv6Status OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterIpv6Table'. Enables dynamic creation /
+         deletion of table entries in the current table.  Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterIpv6Entry 15 }
+
+--
+--  Layer 4 filtering configuration table
+--
+
+pktFilterL4Table OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterL4Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table used to match specific source and destination UDP / TCP ports (or
+         both at the same time). This table can be used both to match specific
+         ports or port ranges between a minimum and maximum port."
+    ::= { pktFilter 7 }
+
+pktFilterL4Entry OBJECT-TYPE
+    SYNTAX            PktFilterL4Entry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing UDP / TCP packet filtering rules applicable to a
+         particular filtering block."
+    INDEX { pktFilterL4Index }
+    ::= { pktFilterL4Table 1 }
+
+PktFilterL4Entry ::= SEQUENCE {
+    pktFilterL4Index              TableIndex,
+    pktFilterL4StreamName         DisplayString,
+    pktFilterL4Protocol           INTEGER,
+    pktFilterL4SrcPortMode        INTEGER,
+    pktFilterL4SrcPortMin         Unsigned32,
+    pktFilterL4SrcPortMax         Unsigned32,
+    pktFilterL4DstPortMode        INTEGER,
+    pktFilterL4DstPortMin         Unsigned32,
+    pktFilterL4DstPortMax         Unsigned32,
+    pktFilterL4Status             RowStatus
+}
+
+pktFilterL4Index OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each UDP / TCP packet filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterL4Entry 1 }
+
+pktFilterL4StreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { pktFilterL4Entry 2 }
+
+pktFilterL4Protocol OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          udp (0),
+                          tcp (1)
+                      }
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This object encodes the layer 4 protocol that applies to the current
+         table entry. There are two possible transport protocols, the User
+         Datagram Protocol (UDP) and the Transfer Control Protocol (TCP). One
+         table could have one entry for TCP and one for UDP applying to the
+         same filtering block but if would be impossible to match any packet if
+         both are enabled at the same time."
+    ::= { pktFilterL4Entry 3 }
+
+pktFilterL4SrcPortMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          range (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by source port in the current filter. The value
+         configured here is used to determine which frames are allowed to pass
+         through the filter and which ones are blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': The source port is ignored and not taken into account for
+           the purpose of the filter. All frames are allowed to pass through the
+           filter when Ignore is configured if they are not blocked by other
+           selection rule.
+
+         - 'inRange': All frames with a destination port in an specified range
+           are allowed to pass through the filter. The port range is specified
+           with by means 'pktFilterL4SrcPortMin' and 'pktFilterL4SrcPortMax'."
+    ::= { pktFilterL4Entry 4 }
+
+pktFilterL4SrcPortMin OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..65535)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the minimum 16-bit source port allowed to pass through the
+         source port selection filter. The port is configured and displayed in
+         decimal format."
+    ::= { pktFilterL4Entry 5 }
+
+pktFilterL4SrcPortMax OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..65535)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the maximum 16-bit TCP source port allowed to pass through the
+         source port selection filter. The port is configured and displayed in
+         decimal format."
+    ::= { pktFilterL4Entry 6 }
+
+pktFilterL4DstPortMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          range (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by the 2-byte protocol field in the current filter.
+         The value configured here is used to determine which frames are allowed
+         to pass through the filter and which ones are blocked. The available
+         configuration values for this field are:
+
+         - 'ignore': The source port is ignored and not taken into account for
+           the purpose of the filter. All frames are allowed to pass through the
+           filter when Ignore is configured if they are not blocked by other
+           selection rule.
+
+         - 'inRange': All frames with a destination port in an specified range
+           are allowed to pass through the filter. The port range is specified
+           with by means 'pktFilterL4DstPortMin' and 'pktFilterL4DstPortMax'." 
+    ::= { pktFilterL4Entry 7 }
+
+pktFilterL4DstPortMin OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..65535)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the minimum 16-bit destination port allowed to pass through
+         the Destination port selection filter. The port is configured and
+         displayed in decimal format."
+    ::= { pktFilterL4Entry 8 }
+
+pktFilterL4DstPortMax OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..65535)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This is the maximum 16-bit destination port allowed to pass through
+         the Destination port selection filter. The port is configured and
+         displayed in decimal format."
+    ::= { pktFilterL4Entry 9 }
+
+pktFilterL4Status OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterL4Table'. Enables dynamic creation /
+         deletion of table entries in the current table.  Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { pktFilterL4Entry 10 }
+
+--
+--  MPLS IP filtering configuration table
+--
+
+pktFilterIpMplsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PktFilterIpMplsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table can be used to configure filtering rules operating over
+         the MPLS encapsulation headers.  Fields currently accepted to
+         generate matching rules are the MPLS label and traffic class
+         fields, either in the bottom or in the top level of the MPLS
+         encapsulating stack."
+
+    ::= { pktFilter 8 }
+
+pktFilterIpMplsEntry OBJECT-TYPE
+    SYNTAX            PktFilterIpMplsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing MPLS/IP packet filtering rules applicable to
+         a particular filtering block."
+
+    INDEX { pktFilterIpMplsIndex }
+    ::= { pktFilterIpMplsTable 1 }
+
+PktFilterIpMplsEntry ::= SEQUENCE {
+    pktFilterIpMplsIndex            TableIndex,
+    pktFilterIpMplsStreamName       DisplayString,
+    pktFilterIpMplsBottomLabelMode  INTEGER,
+    pktFilterIpMplsBottomLabel      Unsigned32,
+    pktFilterIpMplsBottomClassMode  INTEGER,
+    pktFilterIpMplsBottomClass      Unsigned32,
+    pktFilterIpMplsTopLabelMode     INTEGER,
+    pktFilterIpMplsTopLabel         Unsigned32,
+    pktFilterIpMplsTopClassMode     INTEGER,
+    pktFilterIpMplsTopClass         Unsigned32,
+    pktFilterIpMplsStatus           RowStatus
+}
+
+pktFilterIpMplsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each MPLS packet filtering
+         block. It is recommended that values are assigned contiguously
+         starting from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+    ::= { pktFilterIpMplsEntry 1 }
+
+pktFilterIpMplsStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { pktFilterIpMplsEntry 2 }
+
+pktFilterIpMplsBottomLabelMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by bottom MPLS label in the current filter. 
+         The available configuration values for this field are:
+
+         - 'ignore': The bottom MPLS label is ignored and not taken into
+           account for the purpose of the filter.  All packets are allowed
+           to pass through the filter when 'ignore' is configured if they
+           are not blocked by other selection rule.
+
+         - 'equal': All packets matching a user configurable pattern are
+           allowed to pass through the filter. The matching pattern is configured
+           with the help of 'pktFilterIpMplsBottomLabel' object."
+
+    ::= { pktFilterIpMplsEntry 3 }
+
+pktFilterIpMplsBottomLabel OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..1048575)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the value of the bottom MPLS label the incoming packets
+         will be matched against in the current filter.  The value
+         configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked. This is a
+         20-bit unsigned value."
+
+    ::= { pktFilterIpMplsEntry 4 }
+
+pktFilterIpMplsBottomClassMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by bottom MPLS traffic class in the current filter. 
+         The available configuration values for this field are:
+
+         - 'ignore': The bottom MPLS traffic class is ignored and not taken
+           into account for the purpose of the filter.  All packets are
+           allowed to pass through the filter when 'ignore' is configured if
+           they are not blocked by other selection rule.
+
+         - 'equal': All packets matching a user configurable pattern are
+           allowed to pass through the filter. The matching pattern is configured
+           with the help of 'pktFilterIpMplsBottomClass' object."
+
+    ::= { pktFilterIpMplsEntry 5 }
+
+pktFilterIpMplsBottomClass OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..7)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the value of the bottom MPLS traffic class the incoming
+         packets will be matched against in the current filter.  The value
+         configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked."
+
+    ::= { pktFilterIpMplsEntry 6 }
+
+pktFilterIpMplsTopLabelMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by top MPLS label in the current filter. 
+         The available configuration values for this field are:
+
+         - 'ignore': The top MPLS label is ignored and not taken into
+           account for the purpose of the filter.  All packets are allowed
+           to pass through the filter when 'ignore' is configured if they
+           are not blocked by other selection rule.
+
+         - 'equal': All packets matching a user configurable pattern are
+           allowed to pass through the filter. The matching pattern is configured
+           with the help of 'pktFilterIpMplsTopLabel' object."
+
+    ::= { pktFilterIpMplsEntry 7 }
+
+pktFilterIpMplsTopLabel OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..1048575)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the value of the top MPLS label the incoming packets
+         will be matched against in the current filter.  The value
+         configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked. This is a
+         20-bit unsigned value."
+
+    ::= { pktFilterIpMplsEntry 8 }
+
+pktFilterIpMplsTopClassMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          ignore (0),
+                          equal (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables selection by top MPLS traffic class in the current filter. 
+         The available configuration values for this field are:
+
+         - 'ignore': The top MPLS traffic class is ignored and not taken
+           into account for the purpose of the filter.  All packets are
+           allowed to pass through the filter when 'ignore' is configured if
+           they are not blocked by other selection rule.
+
+         - 'equal': All packets matching a user configurable pattern are
+           allowed to pass through the filter. The matching pattern is configured
+           with the help of 'pktFilterIpMplsTopClass' object."
+
+    ::= { pktFilterIpMplsEntry 9 }
+
+pktFilterIpMplsTopClass OBJECT-TYPE 
+    SYNTAX            Unsigned32 (0..7)
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the value of the top MPLS traffic class the incoming
+         packets will be matched against in the current filter.  The value
+         configured here is used to determine which packets are allowed to
+         pass through the filter and which ones are blocked."
+
+    ::= { pktFilterIpMplsEntry 10 }
+
+
+pktFilterIpMplsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'pktFilterIpMplsTable'. Enables dynamic creation /
+         deletion of table entries in the current table.  Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { pktFilterIpMplsEntry 11 }
+
+END

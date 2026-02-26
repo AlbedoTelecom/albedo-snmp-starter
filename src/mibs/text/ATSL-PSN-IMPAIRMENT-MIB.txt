@@ -1,0 +1,931 @@
+ATSL-PSN-IMPAIRMENT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for impairment generation control over PSNs.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32                   FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus                      FROM SNMPv2-TC
+    atslGeneral, TableIndex, TimeIntervalMicroS,
+    RatioPercentage                                           FROM ATSL-MIB;
+
+psnImpairment MODULE-IDENTITY
+    LAST-UPDATED "201302010000Z" -- 01 February, 2013
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module contains objects suitable to control event insertion in
+         ATSL equipments capable of add impairments to in packet switched
+         networks (PSNs).
+
+         With the help of this MIB module you can add impairments such as frame
+         delay, frame delay variation and frame loss. The MIB module is flexible
+         enough to allow impairment generation over all PSN traffic or just
+         fraction of it. The way the impairment generation mechanism acts over
+         fractions of network traffic is outside the scope of this MIB module.
+         Traffic streams. Tables implemented here include an stream identifier
+         that enable the managed entity to control to which frames impairments
+         apply. The specific filtering properties of each stream must be
+         defined by means some mechanism not defined in this module.
+
+         Impairment insertion is enabled or disabled by means a single scalar
+         object with a boolean value: 'psnImpEvent'. Moreover, the current MIB
+         module provides support to the following impairment generation
+         configuration tables:
+
+         - 'psnImpLossTable': Enables generation of frame loss event in several
+         deterministic and random modes. Including single event insertion,
+         burst, periodic burst, random and two-state random insertion.
+
+         - 'psnImpDelayTable':  Generates delay and jitter following
+           deterministic or random laws. There are three different insertion
+           modes for delay: deterministic, random (uniform), Random
+           (exponential).
+
+         - 'psnImpBandwidthTable': Bandwidth control blocks are useful in case
+           the user is interested in simulating links of custom bandwidth
+           smaller than the nominal channel capacity. Users have at their
+           disposal two different bandwidth control modes through this MIB
+           module. Bandwidth control by means a policing operation preserves
+           data stream timing but not-conforming packets are lost. Usually,
+           policing is considered best in delay sensitive applications like
+           VoIP. On the other hand bandwidth control by means a shaping filter
+           tends to preserve the information but it may alter the timing of the
+           original data stream. Shaping uses to be the preferred bandwidth
+           control mechanism in data applications.
+
+         - 'psnImpDuplicationTable': Enables generation of duplicated frames
+           over the traffic stream where this impairment block applies. There
+           are two different insertion modes available: single or random. The
+           second one is governed by means a duplication probability parameter.
+
+         - 'psnImpErrorTable': Configures frame error generation within the
+           managed entity. The current module revision supports two different
+           frame error insertion modes: single or random. The second one is
+           governed by means an error probability parameter.
+
+         Write operations (in those objects that allow write operations) is
+         possible only if impairment generation through the 'psnImpEvent'
+         boolean scalar is not enabled.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - Net.Storm GbE Impairment Generator."
+    REVISION     "201302010000Z" -- 01 February, 2013
+    DESCRIPTION
+        "- The text conventions 'TableIndex', 'TimeIntervalMicroS',
+           'RatioPercentage' are now imported from the 'ATSL-MIB' module.
+
+         - A 'RowStatus' row has been added to all impairment configuration
+           tables to enable dinamic management of table rows.
+
+         - The 'psnImpFrameErrorTable' has been renamed to 'psnImpErrorTable'."
+    REVISION     "201301280000Z" -- 28 January, 2013
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 10 }
+
+--
+-- Top level module structure
+--
+
+psnImpControl      OBJECT IDENTIFIER ::= { psnImpairment 1 }
+
+--
+-- Impairment insertion control group
+--
+
+psnImpEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops the event insertion of the currently configured
+         impairments. Insertion is done in all the available impairment
+         blocks (blocks 1 to 15 plus the Default block). Depending on the
+         insertion mode selected for the impairments it may happen that
+         insertion actually finishes but this object is still showing that
+         insertion is active. In this case, it is necessary to disable 
+         event insertion by hand before adding new impairments."
+     ::= { psnImpControl 1 }
+
+--
+--  Packet loss insertion configuration table
+--
+
+psnImpLossTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnImpLossEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures generation of frame loss event in different deterministic
+         and random modes. Supported frame loss modes are single event 
+         insertion, burst, periodic burst, random and two-state random
+         insertion."
+    ::= { psnImpairment 2 }
+
+psnImpLossEntry OBJECT-TYPE
+    SYNTAX            PsnImpLossEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing frame loss impairment generation applicable to
+         a particular impairment block."
+    INDEX { psnImpLossIndex }
+    ::= { psnImpLossTable 1 }
+
+PsnImpLossEntry ::= SEQUENCE {
+    psnImpLossIndex               TableIndex,
+    psnImpLossStreamName          DisplayString,
+    psnImpLossMode                INTEGER,
+    psnImpBurstLengthTime         TimeIntervalMicroS,
+    psnImpBurstLengthFrames       Integer32,
+    psnImpSeparationTime          TimeIntervalMicroS,
+    psnImpSeparationFrames        Integer32,
+    psnImpLossProbability         RatioPercentage,
+    psnImpAltLossProbability      RatioPercentage,
+    psnImpMeanLength              Integer32,
+    psnImpAltMeanLength           Integer32,
+    psnImpLossStatus              RowStatus
+}
+
+psnImpLossIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each loss insertion block,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { psnImpLossEntry 1 }
+
+psnImpLossStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnImpLossEntry 2 }
+
+psnImpLossMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none(0),
+                          single(1),
+                          timedBurst(2),
+                          frameBurst(3),
+                          timedPeriodicBurst(4),
+                          framePeriodicBurst(5),
+                          random(6),
+                          twoStateRandom(7)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies to the managed device the way the frame loss events are
+         inserted into the corresponding traffic stream. The available 
+         choices are the following:
+
+          - 'none': Disables frame loss insertion. No frame loss will be
+             inserted if this mode is selected.
+
+          - 'single': One single frame loss is inserted in the first inser-
+             tion opportunity after pressing the EVENT button.
+
+          - 'timedBurst': Drops a sequence of consecutive frames within
+             a configurable time period after pressing the EVENT button.
+
+          - 'frameBurst': Drops a configurable number of consecutive
+            frames after pressing the EVENT button.
+
+          - 'timedPeriodicBurst': Drops periodic frame bursts. The time 
+            periods corresponding to frames to be dropped and frames to
+            be transmitted are configurable.
+
+          - 'framePeriodicBurst': Drops periodic frame bursts. The number
+            of frames that makes up each loss burst and the separation between
+            loss bursts specified in frames are configurable.
+
+          - 'random': Packets are randomly dropped with a configurable 
+            constant probability.
+
+          - 'twoStateRandom': This simulates a transmission channel with
+            two different loss probabilities. This is useful for modelling
+            channels experiencing temporary or periodic interferences."
+    ::= { psnImpLossEntry 3 }
+
+psnImpBurstLengthTime OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Frames received during the time interval specified in this field
+         are all dropped. If no frame is received within the specified
+         period then no frame is dropped.
+
+         This parameter makes sense if 'psnImpLossMode' is set to 'timedBurst'
+         or 'timedPeriodicBurst'. If the current mode is 'timedBurst' the 
+         frame drop interval starts just after the event insertion starts. 
+         If the mode is 'timedPeriodicBurst', drop events are periodically 
+         inserted after starting impairment generation. Then separation
+         between frame drop events is specified with the 'psnImpSeparationTime'
+         parameter."
+    ::= { psnImpLossEntry 4 }
+
+psnImpBurstLengthFrames OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies how many frames make up a loss burst when the loss 
+         insertion mode is set up to either 'framePeriodicBurst' or 
+         'frameBurst'.
+
+         If the current mode is 'frameBurst' then the next 
+         'psnImpBurstLengthFrames' frames ready to be transmitted after starting
+         event insertion will be dropped. If the mode is sett to
+         'framePeriodicBurst' then loss bursts will be periodically inserted.
+         Separation (specified in number of frames) between consecutive loss
+         bursts is specified with the help of the 'psnImpSeparationFrames'
+         parameter."
+    ::= { psnImpLossEntry 5 }
+
+psnImpSeparationTime OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the separation in time units between consecutive loss 
+         bursts when 'psnImpLossMode' is 'timedPeriodicBurst'."
+    ::= { psnImpLossEntry 6 }
+
+psnImpSeparationFrames OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the separation in number of frames between consecutive
+         loss bursts when 'psnImpLossMode' is 'framedPeriodicBurst'."
+    ::= { psnImpLossEntry 7 }
+
+psnImpLossProbability OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If the 'psnImpLossMode' is set to 'random', this is the 
+         probability of a single packet loss event. This parameter also
+         has a meaning when the 'psnImpLossMode' is set to 'twoStateRandom'.
+         In this case it sets the loss probability of one of the two
+         possible states defined for this insertion mode."
+    ::= { psnImpLossEntry 8 }
+
+psnImpAltLossProbability OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the loss probability of the second state when
+         'psnImpLossMode' is configured to 'twoStateRandom'. The
+         first state loss probability is configured with 'psnImpLossProbability'."
+    ::= { psnImpLossEntry 9 }
+
+psnImpMeanLength OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the average length in number of frames of the first
+         state if 'twoStateRandom' is the current frame loss insertion mode
+         configured in 'psnImpLossMode'. The loss probability for this 
+         state is configured with the help of 'psnImpSeparationTime'."
+    ::= { psnImpLossEntry 10 }
+
+psnImpAltMeanLength OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the average length in number of frames of the second
+         state if 'twoStateRandom' is the current frame loss insertion mode
+         configured in 'psnImpLosMode'. The loss probability for this state
+         is configured with the help of 'psnImpSeparationTime'."
+    ::= { psnImpLossEntry 11 }
+
+psnImpLossStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnImpLossTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnImpLossEntry 12 }
+
+--
+--  Delay and jitter insertion configuration table
+--
+
+psnImpDelayTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnImpDelayEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures generation of delay and jitter events in different
+         deterministic and random modes. Supported delay and jitter modes are:
+         deterministic delay insertion, random delay with uniform PDF and random
+         delay with exponential PDF.
+
+         Deterministic mode corresponds with pure delay insertion while random
+         delay modes contain both a pure delay component and a jitter component
+         caused by random variations of delay variation for each pair of
+         impaired frames."
+    ::= { psnImpairment 3 }
+
+psnImpDelayEntry OBJECT-TYPE
+    SYNTAX            PsnImpDelayEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing delay and jitter impairment generation
+         applicable to a particular impairment block."
+    INDEX { psnImpDelayIndex }
+    ::= { psnImpDelayTable 1 }
+
+PsnImpDelayEntry ::= SEQUENCE {
+    psnImpDelayIndex              TableIndex,
+    psnImpDelayStreamName         DisplayString,
+    psnImpDelayMode               INTEGER,
+    psnImpDelay                   TimeIntervalMicroS,
+    psnImpDelayMaximum            TimeIntervalMicroS,
+    psnImpDelayMinimum            TimeIntervalMicroS,
+    psnImpDelayAverage            TimeIntervalMicroS,
+    psnImpDelayAllowReordering    TruthValue,
+    psnImpDelayStatus             RowStatus
+}
+
+psnImpDelayIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each delay and jitter
+         insertion  block. It is recommended that values are assigned 
+         contiguously starting from 1. The value for each block index must
+         remain constant at least from one re-initialization of the entity's
+         network management to the next re-initialization."
+    ::= { psnImpDelayEntry 1 }
+
+psnImpDelayStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an
+         interface text name, such as 'eth0' or a stream identifier such as
+         'eth0.0' depending on the capabilities available in the managed
+         entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnImpDelayEntry 2 }
+
+psnImpDelayMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none(0),
+                          deterministic(1),
+                          randomUniform(2),
+                          randomExponential(3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the way the frame delay events will be added to frames.
+         The available delay insertion modes are:
+
+         - 'none': Disables delay / jitter insertion.
+
+         - 'deterministic': Adds a constant configurable delay to all matching
+           frames.
+
+         - 'randomUniform': Adds a random delay to each matching frame. 
+           The probability density function in this delay insertion mode
+           is uniform.
+
+         - 'randomExponential': Adds a random delay to each matching frame. The
+           probability density function in this delay insertion mode is
+           exponential."
+    ::= { psnImpDelayEntry 3 }
+
+psnImpDelay OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Deterministic delay to be applied to all frames processed by this
+         processing block if 'psnImpDelayMode' is set to 'deterministic'."
+    ::= { psnImpDelayEntry 4 }
+
+psnImpDelayMaximum OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the maximum delay to be applied to frames processed by
+         the current impairment block if 'psnImpDelayMode' is set to 
+         'randomUniform'."
+    ::= { psnImpDelayEntry 5 }
+
+psnImpDelayMinimum OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the minimum delay to be applied to frames processed by
+         the current impairment block if 'psnImpDelayMode' is set to 
+         'randomUniform' or 'randomExponential'."
+    ::= { psnImpDelayEntry 6 }
+
+psnImpDelayAverage OBJECT-TYPE
+    SYNTAX            TimeIntervalMicroS
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the average delay to be applied to frames processed by the
+         current impairment block if 'psnImpDelayMode' is set to
+         'randomExponential'.
+
+         Delay is not bounded when the delay insertion mode is set to
+         'randomExponential. For this reason it makes no sense to configure the
+         maximum delay in this case."
+    ::= { psnImpDelayEntry 7 }
+
+psnImpDelayAllowReordering OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "This parameter enables the user to decide which is the priority when
+         generating random delay: to preserve the transmission order or to
+         preserve the shape of the delay probability density function at the
+         price of altering the transmission packet ordering.
+
+         This parameter makes sense only if the inter-frame time is of the 
+         same order or smaller than the inserted jitter. Not allowing 
+         reordering preserves the transmission order but in this case the 
+         equipment may be unable to add delay to the traffic with uniform or
+         random probability distributions. In this case the configured 
+         probability distribution are replaced by a new much more complex one
+         with correlations between consecutive and non consecutive frames."
+    ::= { psnImpDelayEntry 8 }
+
+psnImpDelayStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnImpDelayTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnImpDelayEntry 9 }
+
+--
+--  Bandwidth control configuration table
+--
+
+psnImpBandwidthTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnImpBandwidthEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Bandwidth control is useful in case the user is interested in
+         simulating links of custom bandwidth smaller than the nominal channel
+         capacity. Users have at their disposal two different bandwidth
+         control modes through this table. Bandwidth control by means a 
+         policing operation preserves data stream timing but not-conforming 
+         packets are lost. Usually, policing is considered best in delay 
+         sensitive applications like VoIP. On the other hand bandwidth control
+         by means a shaping filter tends to preserve the information but it
+         may alter the timing of the original data stream. Shaping uses to
+         be the preferred bandwidth control mechanism in data applications."
+    ::= { psnImpairment 4 }
+
+psnImpBandwidthEntry OBJECT-TYPE
+    SYNTAX            PsnImpBandwidthEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing bandwidth control generation applicable to
+         a particular impairment block."
+    INDEX { psnImpBandwidthIndex }
+    ::= { psnImpBandwidthTable 1 }
+
+PsnImpBandwidthEntry ::= SEQUENCE {
+    psnImpBandwidthIndex          TableIndex,
+    psnImpBandwidthStreamName     DisplayString,
+    psnImpBandwidthMode           INTEGER,
+    psnImpBandwidthFrameRate      Integer32,
+    psnImpBandwidthFrameMBS       Integer32,
+    psnImpBandwidthBitRate        Integer32,
+    psnImpBandwidthByteMBS        Integer32,
+    psnImpBandwidthStatus         RowStatus
+}
+
+psnImpBandwidthIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each bandwidth control block. It
+         is recommended that values are assigned contiguously starting from 1.
+         The value for each block index must remain constant at least from one
+         re-initialization of the entity's network management to the next
+         re-initialization."
+    ::= { psnImpBandwidthEntry 1 }
+
+psnImpBandwidthStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnImpBandwidthEntry 2 }
+
+psnImpBandwidthMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none(0),
+                          shapingFrame(1),
+                          policingFrame(2),
+                          shapingBit(3),
+                          policingBit(4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies the way the bandwidth control mode to be used by the filter.
+         The available modes are:
+
+         - 'none': Disables bandwidth control.
+
+         - 'shapingFrame': Simulates a shaping filter. The shaping filter
+           allowed to transmit one frame per each 'token' stored in its 'token
+           bucket' so that the bandwidth remains within the configured limit
+           expressed in frames/s. The shaping bucket is filled with new tokens
+           at a constant rate to replace the ones spent in transmitted frames.
+           If one packet finds no token  in the bucket then it waits in a
+           temporary buffer until a token is available.
+
+         - 'policingFrame': Simulates a policing filter. A policing filter
+           is allowed to transmit one frame per each 'token' stored in a virtual
+           buffer known as 'token bucket' so that the bandwidth remains within
+           the configured limit expressed in frames/s. The bucket is filled with
+           new tokens at a constant rate to replace the ones spent in
+           transmitted frames. If one frame finds no token in the bucket when is
+           going to be transmitted, then it is automatically dropped.
+
+         - 'shapingBit': Simulates a shaping filter. The shaping filter
+           is allowed to transmit one byte per each 'token' stored in its 'token
+           bucket' so that the bandwidth remains within the configured limit
+           expressed in bit/s. The shaping bucket is filled with new tokens at a
+           constant rate to replace the ones spent in transmitted frames. If one
+           packet finds not enough tokens in the bucket then it waits in a
+           temporary buffer until anough tokens are available. One token is
+           valid for transmission of one byte. For this reason, longer frames
+           require more tokens to be transmitted and it is more likely for
+           longer frames to have to wait in the temporary buffer.
+
+         - 'policingBit': Simulates a policing filter. A policing filter
+           is allowed to transmit one byte for each 'token' stored in its 'token
+           bucket' so that the bandwidth remains within the configured limit
+           expressed in bit/s. The shaping bucket is filled with new tokens at a
+           constant rate to replace the ones spent in transmitted frames. If one
+           packet finds not enough tokens in the bucket when it is going to be
+           transmitted, then it is automatically dropped. One token is valid for
+           transmission of one byte. For this reason, longer frames require more
+           tokens and it is more likely for them to be dropped due
+           to insufficient amount of tokens available."
+    ::= { psnImpBandwidthEntry 3 }
+
+psnImpBandwidthFrameRate OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "It is the rate expressed in frames/s at which new tokens fill the
+         bandwidth control filter (policing or shaping) 'token bucket'.
+
+         The 'psnImpBandwidthFrameRate' value corresponds to the sustainable
+         rate supported by the bandwidth control filter which does not add
+         extra delay or drops any frame."
+    ::= { psnImpBandwidthEntry 4 }
+
+psnImpBandwidthFrameMBS OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the buffer size ('token bucket' size) in frame capacity if 
+         'psnImpBandwidthMode' is set to one of the available frames/s policing
+         or shaping modes ('shapingFrame', 'policingFrame'). The 
+         'psnImpBandwidthFrameMBS' enables the user to add flexibility to
+         the decision about whether one frame is conforming or not when the
+         incoming rate is larger than the configured filtering rate."
+    ::= { psnImpBandwidthEntry 5 }
+
+psnImpBandwidthBitRate OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "It is the rate expressed in bit/s at which new tokens fill the
+         bandwidth control filter (policing or shaping) 'token bucket'.
+
+         The 'psnImpBandwidthFrameRate' value corresponds to the sustainable
+         rate supported by the bandwidth control filter which does not add
+         extra delay or drops any frame."
+    ::= { psnImpBandwidthEntry 6 }
+
+psnImpBandwidthByteMBS OBJECT-TYPE
+    SYNTAX            Integer32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the buffer size ('token bucket' size) in number of bytes if 
+         'psnImpBandwidthMode' is set to one of the available bit/s policing
+         or shaping modes ('shapingFrame', 'policingFrame'). The 
+         'psnImpBandwidthFrameMBS' enables the user to add flexibility to
+         the decision about whether one frame is conforming or not when the
+         incoming rate is larger than the configured filtering rate."
+    ::= { psnImpBandwidthEntry 7 }
+
+psnImpBandwidthStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnImpBandwidthTable'. Enables dynamic creation
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnImpBandwidthEntry 8 }
+
+--
+--  Frame duplication insertion configuration table
+--
+
+psnImpDuplicationTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnImpDuplicationEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Enables generation of duplicated frames over the traffic stream
+         where this impairment block applies. There are two different
+         insertion modes available: single or random. The second one is 
+         governed by means a duplication probability parameter.
+
+         If duplication is enabled, the resulting outgoing traffic could be
+         higher than the incoming traffic. That means that for very high
+         traffic load the outgoing traffic could become higher than the
+         nominal line capacity. For this reason, duplication has to be used
+         with care."
+    ::= { psnImpairment 5 }
+
+psnImpDuplicationEntry OBJECT-TYPE
+    SYNTAX            PsnImpDuplicationEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing frame dulplication generation applicable to
+         a particular impairment block."
+    INDEX { psnImpDuplicationIndex }
+    ::= { psnImpDuplicationTable 1 }
+
+PsnImpDuplicationEntry ::= SEQUENCE {
+    psnImpDuplicationIndex        TableIndex,
+    psnImpDuplicationStreamName   DisplayString,
+    psnImpDuplicationMode         INTEGER,
+    psnImpDuplicationProbability  RatioPercentage,
+    psnImpDuplicationStatus       RowStatus
+}
+
+psnImpDuplicationIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each duplication gene-
+         ration block. It is recommended that values are assigned 
+         contiguously starting from 1. The value for each block index must
+         remain constant at least from one re-initialization of the
+         entity's network management to the next re-initialization."
+    ::= { psnImpDuplicationEntry 1 }
+
+psnImpDuplicationStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an
+         interface text name, such as 'eth0' or a stream identifier such as
+         'eth0.0' depending on the capabilities available in the managed
+         entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnImpDuplicationEntry 2 }
+
+psnImpDuplicationMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none(0),
+                          single(1),
+                          random(2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies to the managed entity the way the frame duplication events
+         are inserted into the traffic flow. The available choices are the
+         following:
+
+          - 'none': Disables frame duplication insertion. No frame will be
+            duplicated if this mode is selected.
+
+          - 'single': One single frame duplicated in the first duplication
+            opportunity after pressing the EVENT button.
+
+          - 'random': Packets are randomly duplicated with a configurable 
+            constant probability."
+    ::= { psnImpDuplicationEntry 3 }
+
+psnImpDuplicationProbability OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If 'psnImpDuplicationMode' is set to 'random', this is the 
+         probability of a single duplication event."
+    ::= { psnImpDuplicationEntry 4 }
+
+psnImpDuplicationStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnImpDuplicationTable'. Enables dynamic
+         creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available
+         for read / write operations if the status column is set to
+         something different to 'active'. See the REFERENCEd documents
+         to get more information about the ancoding and use of the
+         status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnImpDuplicationEntry 9 }
+
+--
+--  Frame error insertion configuration table
+--
+
+psnImpErrorTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnImpErrorEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+         "Configures frame error generation within the managed entity.
+          The current module revision supports two different frame error
+          insertion modes: single or random. The second one is governed
+          by means an error probability parameter."
+    ::= { psnImpairment 6 }
+
+psnImpErrorEntry OBJECT-TYPE
+    SYNTAX            PsnImpErrorEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing frame dulplication generation applicable to
+         a particular impairment block."
+    INDEX { psnImpErrorIndex }
+    ::= { psnImpErrorTable 1 }
+
+PsnImpErrorEntry ::= SEQUENCE {
+    psnImpErrorIndex              TableIndex,
+    psnImpErrorStreamName         DisplayString,
+    psnImpErrorFrameMode          INTEGER,
+    psnImpErrorFrameProbability   RatioPercentage,
+    psnImpErrorStatus             RowStatus
+}
+
+psnImpErrorIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each frame error gene-
+         ration block. It is recommended that values are assigned 
+         contiguously starting from 1. The value for each block index must
+         remain constant at least from one re-initialization of the
+         entity's network management to the next re-initialization."
+    ::= { psnImpErrorEntry 1 }
+
+psnImpErrorStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnImpErrorEntry 2 }
+
+psnImpErrorFrameMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none(0),
+                          single(1),
+                          random(2)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies to the managed entity the way the frame error events
+         are inserted into the traffic flow. The available choices are the
+         following:
+
+          - 'none': Disables frame error insertion. No frame errors will be
+            added if this mode is selected.
+
+          - 'single': One single frame error is inserted in the first
+            opportunity after pressing the EVENT button.
+
+          - 'random': Frame errors are are randomly inserted with a 
+            configurable constant probability."
+    ::= { psnImpErrorEntry 3 }
+
+psnImpErrorFrameProbability OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If 'psnImpErrorFramerMode' is set to 'random', this is the probability
+         of a single duplication event."
+    ::= { psnImpErrorEntry 4 }
+
+psnImpErrorStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnImpErrorTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnImpErrorEntry 5 }
+END

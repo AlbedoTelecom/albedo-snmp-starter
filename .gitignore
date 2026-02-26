@@ -1,0 +1,7 @@
+snmpy_venv/
+__pycache__/
+src/mibs/compiled/*
+!src/mibs/compiled/.gitkeep
+
+test_albedo_libs.py
+validator.ipynb

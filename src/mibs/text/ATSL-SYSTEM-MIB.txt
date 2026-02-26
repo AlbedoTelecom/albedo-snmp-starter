@@ -1,0 +1,408 @@
+ATSL-SYSTEM-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB for the Unit's System Information.
+--
+
+IMPORTS
+    Integer32, MODULE-IDENTITY, OBJECT-TYPE             FROM SNMPv2-SMI
+    DisplayString, TEXTUAL-CONVENTION                   FROM SNMPv2-TC
+    atslGeneral, TableIndex                             FROM ATSL-MIB;
+
+atslSystem MODULE-IDENTITY
+    LAST-UPDATED "202411250000Z" -- 25 November, 2024
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+
+    DESCRIPTION
+        "System MIB of ALBEDO Telecom."
+
+    REVISION     "202411250000Z" -- 25 November, 2024
+    DESCRIPTION
+        "Draft 1 public."
+
+    ::= { atslGeneral 3 }
+
+Real32 ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d-6"
+    STATUS            current
+    DESCRIPTION
+         "Represents a real decimal number with six decimal digits.
+          Both positive and negative numbers are accepted (and zero,
+          which is encoded as 0.000000)"
+    SYNTAX            Integer32
+
+-- IDENTITY SECTION --
+atslSysID OBJECT IDENTIFIER ::= { atslSystem 1 }
+
+sysIDproduct OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Unit's model name."
+
+::= { atslSysID 1 }
+
+sysIDserialNumber OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Unit's serial number."
+
+::= { atslSysID 2 }
+
+sysIDswVersion OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Unit's software release (version)."
+
+::= { atslSysID 3 }
+
+sysIDhwVersion OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Unit's hardware release (version)."
+
+::= { atslSysID 4 }
+
+sysIDfwVersion OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Unit's firmware releases.
+         Depending on the product, there could be multiple releases;
+         in this case they will be shown separated by ','."
+
+::= { atslSysID 5 }
+
+sysIDpwrMngmtVersion OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Unit's firmware version of power
+         management of the Unit, it is a number that in hexadecimal
+         represent the next information :
+         -> Higher byte : Version major number
+         -> Lower  byte : Version minor number"
+
+::= { atslSysID 6 }
+
+-- LICENSES SECTION --
+atslSysLicTable OBJECT-TYPE
+
+    SYNTAX       SEQUENCE OF SysLicEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "This Table shows the Information related to the system
+         licenses, including the status and a brief description
+         of each one."
+
+::= { atslSystem 2 }
+
+sysLicEntry OBJECT-TYPE
+
+    SYNTAX       SysLicEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "Table Entry containing the principal parameters of the Unit's
+         licenses."
+    INDEX  { sysLicID }
+
+::= { atslSysLicTable 1 }
+
+SysLicEntry ::= SEQUENCE
+{
+    sysLicID           TableIndex,
+    sysLicDescription  DisplayString,
+    sysLicStatus       INTEGER,
+    sysLicStartDate    DisplayString,
+    sysLicFinishDate   DisplayString
+}
+
+sysLicID OBJECT-TYPE
+
+    SYNTAX       TableIndex
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A unique value, greater than zero, for each License block. It
+         is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant
+         at least from one re-initialization of the entity's network
+         management to the next re-initialization."
+
+::= { sysLicEntry 1 }
+
+sysLicDescription OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Field that contains a brief description of the License,
+         providing the necessary information to know what activates
+         the License within the unit."
+
+::= { sysLicEntry 2 }
+
+sysLicStatus OBJECT-TYPE
+
+    SYNTAX       INTEGER
+    {
+        deactivated (0),
+        active      (1)
+    }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Field that shows the license's status (active/deactivated)
+         inside the Unit."
+
+::= { sysLicEntry 3 }
+
+sysLicStartDate OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Field that represent the start Date of a License in the Unit,
+         if the string is empty, the license is permanent.
+         The text format of the date is 'dd/mm/yyyy'."
+
+::= { sysLicEntry 4 }
+
+sysLicFinishDate OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Field that represent the end Date of a License in the Unit,
+         if the string is empty, the license is permanent.
+         The text format of the date is 'dd/mm/yyyy'."
+
+::= { sysLicEntry 5 }
+
+-- HARDWARE INVENTORY SECTION --
+atslSysHWInvTable OBJECT-TYPE
+
+    SYNTAX       SEQUENCE OF SysHWInvEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "Information about the hardware modules installed and present
+         in the Unit. Depending on the Unit, the modules could be fixed
+         and/or removable."
+
+::= { atslSystem 3 }
+
+sysHWInvEntry OBJECT-TYPE
+
+    SYNTAX       SysHWInvEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "Table Entry containing information about the system HW
+         inventory."
+    INDEX  { sysHWInvID }
+
+::= { atslSysHWInvTable 1 }
+
+SysHWInvEntry ::= SEQUENCE
+{
+    sysHWInvID     TableIndex,
+    sysHWInvName   DisplayString,
+    sysHWInvType   DisplayString,
+    sysHWInvVarID  DisplayString,
+    sysHWInvAttr   DisplayString,
+    sysHWInvSlot   INTEGER
+}
+
+sysHWInvID OBJECT-TYPE
+
+    SYNTAX       TableIndex
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A unique value, greater than zero, for each Module block in
+         the HW inventory. It is recommended that values are assigned
+         contiguously starting from 1. The value for each block index
+         must remain constant at least from one re-initialization of
+         the entity's network management to the next re-initialization."
+
+::= { sysHWInvEntry 1 }
+
+sysHWInvName OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the name of the specific HW module.
+         The name represents the module identifier; some modules may
+         have the same name, but they will probably differ in variant,
+         giving each one uniqueness."
+
+::= { sysHWInvEntry 2 }
+
+sysHWInvType OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows which type the specific HW module is.
+         The type is given by the properties of the module as well as
+         the features it has."
+
+::= { sysHWInvEntry 3 }
+
+sysHWInvVarID OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the variant ID of the module, it is an
+         optional parameter and depends on the type of the module,
+         some types have more than one variant, so this field help
+         to identify the module."
+
+::= { sysHWInvEntry 4 }
+
+sysHWInvAttr OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the attributes of the specific HW module,
+         it is an optional parameter. Depending on the module's type
+         this field could show properties of the module or can show
+         extra information about it."
+
+::= { sysHWInvEntry 5 }
+
+sysHWInvSlot OBJECT-TYPE
+
+    SYNTAX       INTEGER
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows which unit's slot is been used for the
+         specific HW module inside the Unit."
+
+::= { sysHWInvEntry 6 }
+
+-- LOCATION SECTION --
+atsleSysLocation  OBJECT IDENTIFIER ::= { atslSystem 4 }
+
+sysLocLongitude OBJECT-TYPE
+
+    SYNTAX       Real32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the longitude of the location of the Unit, is
+         a information that is given by the user.
+         It will be represented by a real number with 6 decimal places,
+         giving the most information possible."
+
+::= { atsleSysLocation 1 }
+
+sysLocLatitude OBJECT-TYPE
+
+    SYNTAX       Real32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This field shows the latitude of the location of the Unit, is
+         a information that is given by the user.
+         It will be represented by a real number with 6 decimal places,
+         giving the most information possible."
+
+::= { atsleSysLocation 2 }
+
+sysLocSite OBJECT-TYPE
+
+    SYNTAX       DisplayString
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This field shows the Site where the Unit is been used, is a
+         information that is given by the user."
+
+::= { atsleSysLocation 3 }
+
+-- COMMAND SECTION --
+atslSysCommand OBJECT IDENTIFIER ::= { atslSystem 5 }
+
+sysCmdRestoreDft OBJECT-TYPE
+
+    SYNTAX       INTEGER
+    {
+        run  (1),
+        idle (0)
+    }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This field is used to restore the configuration of the Unit to
+         the factory settings.
+         When the 'run' order is given, the corresponding actions are
+         triggered; while they are being carried out, the 'run' state
+         is maintained; upon completion, it automatically returns to
+         the 'idle' state."
+
+    DEFVAL { idle }
+
+::= { atslSysCommand 1 }
+
+sysCmdSaveStartup OBJECT-TYPE
+
+    SYNTAX       INTEGER
+    {
+        run  (1),
+        idle (0)
+    }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This field is used to save the current configuration of the
+         unit as the startup configuration.
+         When the 'run' order is given, the corresponding actions are
+         triggered; while they are being carried out, the 'run' state
+         is maintained; upon completion, it automatically returns to
+         the 'idle' state."
+
+    DEFVAL { idle }
+
+::= { atslSysCommand 2 }
+
+END

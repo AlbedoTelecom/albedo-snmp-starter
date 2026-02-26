@@ -1,0 +1,566 @@
+ATSL-VF-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Voice Frequency (VF) generation and analysis.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex, Real32, Integer8             FROM ATSL-MIB;
+
+ vfTest MODULE-IDENTITY
+    LAST-UPDATED "201811220000Z" -- 22 November, 2018
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "The ATSL-VF-MIB enables controlling units to deal with inputs and 
+         outputs related with Voice Frequency (VF) tests. It is central to this 
+         application the ability to generate and measure the properties of 
+         audio tones. With this purpose in mind, the MIB defines a table to 
+         measure frequency and level from analog inputs and a second table to 
+         configure a tone generator. The way the agent delivers the tone is 
+         left open and may depend on the agent, operation mode or specific 
+         configuration. Some agents may, for example, transmit the tone though 
+         an analog output, digitally encoded E1 / T1 time slot or an Ethernet / 
+         IP VoIP packet flow.
+
+         'Speaker' outputs could be used to control the content transmitted to 
+         any of these outputs (analog, digital circuits, packet interfaces) or 
+         to monitor inputs of any of the previous types.
+
+         Scalars
+
+         - 'vfTestEnable': Starts / Stops VF tests in the managed entity. The 
+           action starts monitoring in all the available blocks. The number of 
+           monitoring blocks may not be the same for different managed entities 
+           and it may be only one monitoring block for some of them.
+
+         Tables
+
+         - 'vfTestToneGeneratorTable': Configures tone generators in the agent. 
+           The tone is defined though its level and frequency. Allowewd ranges 
+           and resolution for these parameters may not be the same for 
+           different agents or different instances in the same agent.
+
+         - 'vfTestAnalogTable': This table stores information about VF signals 
+           received from analog ports. This information belongs to two
+           different sets: (1) analog results, including the instantaneous
+           frequency and level measured in the analog input (2) digital results
+           related with the ITU-T G.711 (A-law) bit encoding of these signals.
+
+         - 'vfTestSpeakerTable': Configures an speaker output in the agent. It 
+           enables the controlling entity to select the source for the audio and 
+           its volume. This is not the same that configuring the level of a tone 
+           generator but a tone generator could be connected to the speaker 
+           output if the right source is configured. Once this is done, the 
+           volume could be used to set a suitable level for the speaker. Typical 
+           applications of speaker outputs is monitoring of audio signals   
+           generated internally or received through a digital or analog 
+           input from an external entity.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - AT-2048 E1 / Datacom Tester.
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+         - Ether10.Genius 10GbE / E1/T1 / Datacom / C37.94 Tester.
+         - xGenius Transmission & Synchronization."
+    REVISION     "201811220000Z" -- 22 November, 2018
+    DESCRIPTION
+        "- The 'vfTestAnalogCodeAvg' OID is deleted from the 
+          'vfTestAnalogTable'.
+         - The following OIDs are added to the 'vfTestAnalogTable': 
+          'vfTestAnalogFrequencyMax', 'vfTestAnalogFrequencyMin', 
+          'vfTestAnalogLevelMax', 'vfTestAnalogLevelMin'."
+    REVISION     "201810090000Z" -- 9 October, 2018
+    DESCRIPTION
+        "Draft 1 public. Latest version available."
+    ::= { atslGeneral 33 }
+
+--
+-- Textual conventions
+--
+
+SpeakerLevel ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+        "Configures the audio signal level in a audio output. Level '1' 
+         corresponds with the weakest and level '5' is the strongest.
+
+         This textual convention is suitable for outputs to be connected to an 
+         speaker or a headset but it does not provide reliable level to 
+         calibrated outputs that could be used for atenuation and power tests."
+    SYNTAX            Unsigned32 (1..5)
+
+SpeakerSource ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Configures the source in a audio output port. Tipically, the source is 
+         a digitally encoded VF signal that is to be directed to an analog 
+         output for monitoring purposes. There are acceptable values for an 
+         audio source:
+
+         - 'off': Disables the audio output. No signal is transmitted through 
+           this output.
+
+         - 'internal': Connects the audio output with an internally generated 
+           audio source such as a tone generator
+
+         - 'primarySource': Selects the audio from an external source. It might 
+           be an audio input, a time slot in a TDM signal or anything it could 
+           be decoded into an audio signal.
+
+         - 'secondarySource': Selects the audio from an alternative external 
+           source. It may be anything of the same kind of the primary source."
+    SYNTAX            INTEGER {
+                          off (0),
+                          internal (1),
+                          primarySource (2),
+                          secondarySource (3)
+                      }
+
+--
+-- Top level module structure
+--
+
+vfTestControl      OBJECT IDENTIFIER ::= { vfTest 1 }
+
+--
+-- Monitoring enable / disable control group
+--
+
+vfTestEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops VF tests in the agent. The action starts monitoring in 
+         all the available VF test instances. The number of instances may not 
+         be the same in different agents. Some agents may have only one VF 
+         test instance."
+    ::= { vfTestControl 1 }
+
+--
+--  vfTestToneGeneratorTable
+--
+
+vfTestToneGeneratorTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF VfTestToneGeneratorEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures tone generators in the agent. The tone is defined though 
+         its level and frequency. Allowewd ranges and resolution for these 
+         parameters may not be the same for different agents or different 
+         instances in the same agent.
+
+         There is one entry in the table for each tone generator instance in 
+         the agent. The OIDs defined in each entry allow the controlling entity 
+         to configure tones in analog outputs but also digital tones 
+         transmitted in TDM interfaces such as E1 or T1 time slots."
+    ::= { vfTest 2 }
+
+vfTestToneGeneratorEntry OBJECT-TYPE
+    SYNTAX            VfTestToneGeneratorEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of the 
+         tone generator instances."
+    INDEX { vfTestToneGeneratorIndex }
+    ::= { vfTestToneGeneratorTable 1 }
+
+VfTestToneGeneratorEntry ::= SEQUENCE {
+    vfTestToneGeneratorIndex      TableIndex,
+    vfTestToneGeneratorBlockName  DisplayString,
+    vfTestToneGeneratorLevel      Real32,
+    vfTestToneGeneratorFrequency  Real32,
+    vfTestToneGeneratorStatus     RowStatus
+}
+
+vfTestToneGeneratorIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general tone generator
+         instance. It is recommended that values are assigned contiguously 
+         starting from 1. The value for each instance index must remain 
+         constant at least from one re-initialization of the entity's network 
+         management to the next re-initialization."
+    ::= { vfTestToneGeneratorEntry 1 }
+
+vfTestToneGeneratorBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the agent.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { vfTestToneGeneratorEntry 2 }
+
+vfTestToneGeneratorLevel OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dBm0"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the level in a tone generation block in dBm0. Allowed 
+         range and resolution depends on each particular agent."
+    ::= { vfTestToneGeneratorEntry 3 }
+
+vfTestToneGeneratorFrequency OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Hz"
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the tone frequency in a tone generation block. Allowed 
+         range and resolution depends on each particular agent."
+    ::= { vfTestToneGeneratorEntry 4 }
+
+vfTestToneGeneratorStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'vfTestToneGeneratorTable'. Enables dynamic 
+         creation / deletion of table entries in the current table. Information 
+         contained in the table entry may not be available for read / write 
+         operations if the status column is set to something different 
+         to 'active'. See the  REFERENCEd documents to get more information 
+         about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { vfTestToneGeneratorEntry 5 }
+
+--
+--  vfTestAnalogTable
+--
+
+vfTestAnalogTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF VfTestAnalogEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table stores information from fequency and level tests carried 
+         out at analog interfaces. This information belongs to two different 
+         sets: (1) analog results, including the instantaneous frequency and 
+         level, (2) digital results related with the bit encoding of signals 
+         assuming ITU-T G.711 A-law encoded speech signal.
+
+         Agents supporting several simultaneous frequency and level tests in 
+         analog inputs could define one row per each test instance."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTest 3 }
+
+vfTestAnalogEntry OBJECT-TYPE
+    SYNTAX            VfTestAnalogEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing analog result statistics corresponding to VF 
+         analysis instances defined in the agent."
+    INDEX { vfTestAnalogIndex }
+    ::= { vfTestAnalogTable 1 }
+
+VfTestAnalogEntry ::= SEQUENCE {
+    vfTestAnalogIndex             TableIndex,
+    vfTestAnalogBlockName         DisplayString,
+    vfTestAnalogLevel             Real32,
+    vfTestAnalogLevelMax          Real32,
+    vfTestAnalogLevelMin          Real32,
+    vfTestAnalogFrequency         Real32,
+    vfTestAnalogFrequencyMax      Real32,
+    vfTestAnalogFrequencyMin      Real32,
+    vfTestAnalogCode              Integer8,
+    vfTestAnalogCodeMax           Integer8,
+    vfTestAnalogCodeMin           Integer8,
+    vfTestAnalogStatus            RowStatus
+}
+
+vfTestAnalogIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each analog test instance. It is 
+         recommended that values are assigned contiguously starting from 1. The 
+         value for each instance index must remain constant at least from one 
+         re-initialization of the entity's network management to the next 
+         re-initialization."
+    ::= { vfTestAnalogEntry 1 }
+
+vfTestAnalogBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { vfTestAnalogEntry 2 }
+
+vfTestAnalogLevel OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dBm0"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Power level for the current time slot measured in dBm0 as specified in
+         ITU-T G.711."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTestAnalogEntry 3 }
+
+vfTestAnalogLevelMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dBm0"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum power level for the current time slot measured in dBm0 as
+         specified in ITU-T G.711. The maximum is referred to the beginning of
+         the current monitoring session and if there is not an ongoing 
+         monitoring session then this OID reports the maximum power measured in 
+         the previous session."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTestAnalogEntry 4 }
+
+vfTestAnalogLevelMin OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "dBm0"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minimum power level for the current time slot measured in dBm0 as
+         specified in ITU-T G.711. The minimum is referred to the beginning of
+         the current monitoring session and if there is not an ongoing 
+         monitoring session then this OID reports the minimum power measured in 
+         the previous session."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTestAnalogEntry 5 }
+
+vfTestAnalogFrequency OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Hz"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Frequency for the current time slot measured in Hz. For a G.711 encoded
+         signal with 8 kHz sampling frequency, the maximum allowed frequency is
+         4000 Hz."
+    ::= { vfTestAnalogEntry 6 }
+
+vfTestAnalogFrequencyMax OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Hz"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Maximum frequency for the current time slot measured in Hz. For a G.711 
+         encoded signal with 8 kHz sampling frequency. The maximum is referred 
+         to the beginning of the current monitoring session and if there is not 
+         an ongoing monitoring session then this OID reports the maximum 
+         frequency measured in the previous session."
+    ::= { vfTestAnalogEntry 7 }
+
+vfTestAnalogFrequencyMin OBJECT-TYPE
+    SYNTAX            Real32
+    UNITS             "Hz"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Minmum frequency for the current time slot measured in Hz. For a G.711 
+         encoded signal with 8 kHz sampling frequency. The minimum is referred 
+         to the beginning of the current monitoring session and if there is not 
+         an ongoing monitoring session then this OID reports the minimum 
+         frequency measured in the previous session."
+    ::= { vfTestAnalogEntry 8 }
+
+vfTestAnalogCode OBJECT-TYPE
+    SYNTAX            Integer8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Decimal number that represents the PCM code corresponding with the 
+         signal detected at the analog input.
+
+         This number is referred to the 8-bit PCM code that represents a G.711
+         A-law compressed voice sample."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTestAnalogEntry 9 }
+
+    vfTestAnalogCodeMax OBJECT-TYPE
+    SYNTAX            Integer8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Decimal number that represents the maximum PCM code corresponding with 
+         the signal detected at the analog input.
+
+         This number is referred to the 8-bit PCM code that represents a G.711
+         A-law compressed voice sample."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTestAnalogEntry 10 }
+
+vfTestAnalogCodeMin OBJECT-TYPE
+    SYNTAX            Integer8
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Decimal number that represents the maximum PCM code corresponding with 
+         the signal detected at the analog input.
+
+         This number is referred to the 8-bit PCM code that represents a G.711
+         A-law compressed voice sample."
+    REFERENCE
+        "- ITU-T G.711: 'Pulse code modulation (PCM) of voice frequencies'."
+    ::= { vfTestAnalogEntry 11 }
+
+vfTestAnalogStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'vfTestAnalogTable'. Enables dynamic creation /
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the encoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { vfTestAnalogEntry 12 }
+
+--
+--  vfTestSpeakerTable
+--
+
+vfTestSpeakerTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF VfTestSpeakerEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures an speaker output in the agent. It enables the controlling 
+         entity to select the source for the audio and its volume. This is not 
+         the same that configuring the level of a tone generator but a tone 
+         generator could be connected to the speaker output if the right source 
+         is configured. Once this is done, the volume could be used to 
+         set a suitable level for the speaker.
+
+         Typical applications of speaker outputs is monitoring of audio signals 
+         generated internally or received through a digital or analog input 
+         from an external entity.
+
+         There is one table entry for each speaker output available in the 
+         agent. This approach enables the same MIB to control many ports from a 
+         single entity."
+    ::= { vfTest 4 }
+
+vfTestSpeakerEntry OBJECT-TYPE
+    SYNTAX            VfTestSpeakerEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing the settings for speaker/headset audio output 
+         instances defined in the agent."
+    INDEX { vfTestSpeakerIndex }
+    ::= { vfTestSpeakerTable 1 }
+
+VfTestSpeakerEntry ::= SEQUENCE {
+    vfTestSpeakerIndex            TableIndex,
+    vfTestSpeakerBlockName        DisplayString,
+    vfTestSpeakerLevel            SpeakerLevel,
+    vfTestSpeakerSource           SpeakerSource,
+    vfTestSpeakerStatus           RowStatus
+}
+
+vfTestSpeakerIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each general audio output
+         block. It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at least
+         from one re-initialization of the entity's network management to the
+         next re-initialization."
+    ::= { vfTestSpeakerEntry 1 }
+
+vfTestSpeakerBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the same
+         textual name to identify the stream whenever possible."
+    ::= { vfTestSpeakerEntry 2 }
+
+vfTestSpeakerLevel OBJECT-TYPE
+    SYNTAX            SpeakerLevel
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures or reads the current audio level in an speaker output 
+         through a 'SpeakerLevel' textual convention."
+    ::= { vfTestSpeakerEntry 3 }
+
+vfTestSpeakerSource OBJECT-TYPE
+    SYNTAX            SpeakerSource
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Selects the source audio for an speaker output with the help of a 
+         'SpeakerSource' textual convention. This OID is compatible both with 
+         internally or externally generated VF signals and also with analog or 
+         digital sources."
+    ::= { vfTestSpeakerEntry 4 }
+
+vfTestSpeakerStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'vfTestAudioOutputTable'. Enables dynamic 
+         creation / deletion of table entries in the current table. Information 
+         contained in the table entry may not be available for read / write 
+         operations if the status column is set to something different 
+         to 'active'. See the  REFERENCEd documents to get more information 
+         about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { vfTestSpeakerEntry 5 }
+    
+END

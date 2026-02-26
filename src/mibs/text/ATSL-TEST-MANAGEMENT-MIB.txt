@@ -1,0 +1,317 @@
+ATSL-TEST-MANAGEMENT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for contolling automatic test start and stop.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32              FROM SNMPv2-SMI
+    DisplayString, TruthValue, RowStatus, DateAndTime     FROM SNMPv2-TC
+    atslGeneral, TableIndex, RatioPercentage              FROM ATSL-MIB;
+
+testManagement MODULE-IDENTITY
+    LAST-UPDATED "201809260000Z" -- 26 September, 2018
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "Controls text and monitoring session execution in Albedo agents. This 
+         MIB has capabilities to schedule a test to be run in a future time and 
+         date or to last for a custom period of time. It can also retrieve 
+         information about start time, stop time and progress.
+
+         The scheduler implements a flexible test planning and execution 
+         mechanism that compatible both with agents allowed to run a single   
+         or multiple simultaneous tests. The scheduler is also compatible with 
+         agents implementing different testing categories but currently only 
+         one test type is supported ('global').
+
+         This MIB module is made up of several scalars and configuration / 
+         results tables. The current MIB module provides support for the 
+         following components:
+
+         Scalars
+
+         - 'testManagementLastPowerDown': Displays the date and time when the 
+           agent was powered down for last time.
+
+         Tables
+
+         - 'testManagementSchedulerTable': The scheduler table allows the 
+           controlling device to configure and run tests or start and stop 
+           monitoring in Albedo SNMP agents. The scheduler has a table 
+           structure to allow for different kinds of agents depending on how 
+           many scheduler instances (table rows) they accept.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - AT-2048 E1 / Datacom Tester.
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+         - Ether10.Genius  10GbE / E1 tester.
+         - xGenius Transmission & Synchronization."
+    REVISION     "201809260000Z" -- 26 September, 2018
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+    ::= { atslGeneral 32 }
+
+--
+-- Top level module structure
+--
+
+testManagementControl      OBJECT IDENTIFIER ::= { testManagement 1 }
+
+--
+-- Global test management control group
+--
+
+testManagementLastPowerDown OBJECT-TYPE
+    SYNTAX            DateAndTime
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the date and time when the tester was powered down for 
+         last time."
+    ::= { testManagementControl 1 }
+
+--
+--  Auto start and stop settings
+--
+
+testManagementSchedulerTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TestManagementSchedulerEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "The scheduler table allows the controlling device to configure and run 
+         tests or start and stop monitoring in Albedo SNMP agents. The 
+         scheduler has a table structure to allow for different kinds of agents 
+         depending on how many scheduler instances (table rows) they accept.
+
+         - (1) Single scheduler instance: The table could be configured by de 
+          agent to contain a single scheduler instance. This configuration is    
+          suitable for agents with a single, centralized test running engine.
+
+         - (2) Multiple scheduler instances: Could be used with agents 
+           supporting different kind of tests with independent test running 
+           engines. These engines may operate simultaneously or not but they are 
+           expected to run different kinds of test in the agent. Agents are 
+           expected to generate one static scheduler instance for each test 
+           engine and assign an specific 'type' to each of them.
+
+         - (3) User defined instances: These agents are allowed schedule 
+           multiple tests. The controlling agent could generate scheduling 
+           instantes on its own. The agent could allow running times to overlap 
+           or not depending on its capabilities. Schedulers could be of the same 
+           type or not, depending on how they were configured by the agent.
+
+         All currently existing Albedo agents are of type (1), which means that 
+         the scheduler table has only one row to enable management of a single 
+         test running engine of 'global' type."
+    ::= { testManagement 2 }
+
+testManagementSchedulerEntry OBJECT-TYPE
+    SYNTAX            TestManagementSchedulerEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing control commands applicable to each of  the 
+         available test management instances."
+    INDEX { testManagementSchedulerIndex }
+    ::= { testManagementSchedulerTable 1 }
+
+TestManagementSchedulerEntry ::= SEQUENCE {
+    testManagementSchedulerIndex              TableIndex,
+    testManagementSchedulerName               DisplayString,
+    testManagementSchedulerType               INTEGER,
+    testManagementSchedulerRun                TruthValue,
+    testManagementSchedulerStartMode          INTEGER,
+    testManagementSchedulerStartTime          DateAndTime,
+    testManagementSchedulerStopMode           INTEGER,
+    testManagementSchedulerDuration           INTEGER,
+    testManagementSchedulerUserDuration       Unsigned32,
+    testManagementSchedulerLastStarted        DateAndTime,
+    testManagementSchedulerLastStopped        DateAndTime,
+    testManagementSchedulerProgress           RatioPercentage,
+    testManagementSchedulerStatus             RowStatus
+}
+
+testManagementSchedulerIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each test scheduler instance.
+         It is recommended that values are assigned contiguously starting from
+         1. The value for each block index must remain constant at least from
+         one re-initialization of the entity's network management to the next
+         re-initialization.
+
+         All currently available agents supporting this MIB are compatible with
+         a single schedule instance of 'global' type and as a consequence this
+         table will contain statically only one row."
+    ::= { testManagementSchedulerEntry 1 }
+
+testManagementSchedulerName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name given to the scheduler instance. This is just a 
+         symbolic name that uniquely identifies each scheduler instance."
+    ::= { testManagementSchedulerEntry 2 }
+
+testManagementSchedulerType OBJECT-TYPE
+    SYNTAX            INTEGER {
+                           global (0)
+                      }
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "It describes the test the scheduler instance runs. The only 
+         value currently accepted for this OID is 'global', which runs all 
+         tests available in the agent."
+    ::= { testManagementSchedulerEntry 3 }
+
+testManagementSchedulerRun OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Runs or stops a the test instance identified through
+         'testManagementSchedulerIndex'and 'testManagementSchedulerName'."
+    ::= { testManagementSchedulerEntry 4 }
+
+testManagementSchedulerStartMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          manual (0),
+                          timed (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the start test mode. There are two different choices here:
+
+         - 'manual': The test starts if the scheduler instance is not active and
+           the testing is enabled through 'testManagementSchedulerRun.'
+
+         - 'auto': The test starts at a configured date and time without the
+            need of running any command."
+    ::= { testManagementSchedulerEntry 5 }
+
+testManagementSchedulerStartTime OBJECT-TYPE
+    SYNTAX            DateAndTime
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures or retrieves the start date and time for the next scheduled
+         test using a 'DateAndTime' textual convention.
+
+         To configure'testManagementSchedulerStartTime', you have to set 
+         'testManagementSchedulerStartMode' to 'timed' before."
+    ::= { testManagementSchedulerEntry 6 }
+
+testManagementSchedulerStopMode OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          manual (0),
+                          timed (1)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the stop test mode. There are two different choices here:
+
+         - 'manual': The test stops if the scheduler instance is not active and
+           the testing is disabled through 'testManagementSchedulerRun'. Some 
+           test may have its own duration requirements and they may therefore 
+           not accept manual setting of the stop time
+
+         - 'auto': The test stops automatically once it finishes or when the 
+           ellapsed time reaches some preconfigured test duration value."
+    ::= { testManagementSchedulerEntry 7 }
+
+testManagementSchedulerDuration OBJECT-TYPE
+    SYNTAX            INTEGER {
+                          duration15min (0),
+                          duration1hour (1),
+                          duration24hour (2),
+                          duration7day (3),
+                          duration30day (4),
+                          durationuser (5)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the next test duration. The available test durations are: 
+         'duration15min' (15 minutes), 'duration1hour' (1 hour), 
+         'duration24hour' (24 hours), 'duration7day' (7 days), 
+         'duration30days' (30 days) and 'durationuser' user custom duration.
+
+         To configure'testManagementSchedulerStopTime', you have to set 
+         'testManagementSchedulerStopMode' to 'timed' before."
+    ::= { testManagementSchedulerEntry 8 }
+
+testManagementSchedulerUserDuration OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Sets the next test duration when testManagementSchedulerStopDuration' 
+         has been configured to 'durationuser'.
+
+        The duration has to be entered as a number of seconds."
+    ::= { testManagementSchedulerEntry 9 }
+
+testManagementSchedulerLastStarted OBJECT-TYPE
+    SYNTAX            DateAndTime
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the date and time when the last test in this scheduler 
+         instance was started."
+    ::= { testManagementSchedulerEntry 10 }
+
+testManagementSchedulerLastStopped OBJECT-TYPE
+    SYNTAX            DateAndTime
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the date and time when the last test in this scheduler 
+         instance was Stopped."
+    ::= { testManagementSchedulerEntry 11 }
+
+testManagementSchedulerProgress OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    UNITS             "%"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the current test progress as a percentage value. If 
+         'testManagementSchedulerStopMode' is set to manual then the progress 
+         indication remains zero for the whole test duration."
+    ::= { testManagementSchedulerEntry 12 }
+
+testManagementSchedulerStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'testManagementSchedulerProgress'. Enables 
+         dynamic creation / deletion of table entries in the current table. 
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something 
+         different to 'active'. See the REFERENCEd documents to get more 
+         information about the encoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { testManagementSchedulerEntry 13 }
+    
+END

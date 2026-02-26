@@ -1,0 +1,581 @@
+ATSL-TDM-IMPAIRMENT-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for impairment generation control over TDM networks.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32                  FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue, RowStatus  FROM SNMPv2-TC
+    atslGeneral, TableIndex, RatioPercentage             FROM ATSL-MIB;
+
+tdmImpairment MODULE-IDENTITY
+    LAST-UPDATED "201610100000Z" -- 10 October, 2016
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module contains objects suitable to control event insertion in
+         ATSL equipments capable of add impairments to circuit switched 
+         networks, including Time Division Multiplexing (TDM) networks.
+
+         With the help of this MIB module you can add either anomalies or 
+         defects. There are specific insertion modes for anomalies and defects. 
+         The MIB defines an scalar OID to start / stop event insertion 
+         ('tdmImpEnable') and a second scalar ('tdmImpTarget') to control where 
+         (port, interface, stream) the event is to be inserted. Moreover, the 
+         current MIB module provides support to the following impairment 
+         generation configuration tables:
+
+         - 'tmpImpAnomaliesTable': Configures anomaly insertion in different 
+           modes (single, rate, burst, continuous burst). An anomaly is defined 
+           as the smallest discrepancy which can be observed between the actual 
+           and desired characteristics in the TDM frame structure or content. 
+           The occurrence of a  single anomaly does not constitute an 
+           interruption in the ability to perform a required function but it may 
+           involve temporary transmission performance degradation.
+
+         - 'tdmImpDefectsTable': Configures defect generation event in different 
+           modes (single, rate, burst, continuous burst). A defect is declared 
+           when the density of anomalies has reached a level where the ability 
+           to perform a required function has been interrupted. Defects are 
+           usually persistent indication of a fault that clear only when the 
+           triggering condition has been resolved.
+
+         In the particular case of E1 transmission systems, typical examples
+         of defects are the loss of signal (LOS), loss of frame (LOF) and the
+         alarm indication signal (AIS).
+
+         Write operations (in those objects that allow write operations) is
+         possible only if impairment generation through the 'tdmImpEnable'
+         boolean scalar is not enabled.
+
+         ALBEDO Telecom testers currently implementing this MIB module are
+         listed below:
+
+         - AT-2048 E1 / Datacom Tester.
+         - AT.One T1 / E1 / Datacom Tester.
+         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
+         - Ether10.Genius 10GbE / E1 / Datacom / C37.94 Tester."
+    REVISION     "201610100000Z" -- 10 October, 2016
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 24 }
+
+--
+-- Textual conventions
+--
+
+TdmAnomaly ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Lists typical anomalies found in TDM interfaces. The list could be 
+         applied to ITU-T G.703 2048 kb/s, G.703 codirectional, 
+         contradirectional and centralized interfaces, ANSI T1.102-1999 1544 
+         kb/s, data communications and IEEE C37.94. The anomalies identified by 
+         this textual convention are:
+
+         - 'none': Corresponds with a no anomaly state. If no other anomaly has 
+           been added or detected in the TDM signal, then it is declared to be 
+           in a 'none' anomaly state.
+
+         - 'code': A code anomaly happens when for some reason the line code 
+           rules are not met in the receiving side. For example, in the AMI 
+           line code one 'code' anomaly is declared if two simultaneous '1' of 
+           the same polarity are detected by the receiver because the AMI 
+           encoding rules force the generation logical '1' of alternating 
+           polarity. 
+
+         - 'fas': This anomaly indicates that one or more bits are incorrect in 
+           one Frame Alignment Sequence (FAS). For example, in 2048 kb/s 
+           interfaces, the FAS is the seven-bit '0011011' word. An error in 
+           this word is declared as a 'fas' anaomaly. Some frame structures and 
+           also structureless streams may not contain any FAS word. This event 
+           does not apply to them.
+
+         - 'mfas': The Multi-Frame Alignment Sequence allows the alignment of 
+           the CAS multiframe in 2048 kb/s interfaces. The CAS multiframe uses a 
+           fixed four bit sequence (0000) for multiframe delineation. 
+           A multiframe FAS anomaly is registered for each error found in the 
+           expected multiframe FAS word. This event is only defined in 2048 
+           kb/s frames carrying a CAS multiframe.
+
+         - 'crc': Accounts for CRC anomalies detected by the receiver. 2048 kb/s 
+           frames may optionally include a CRC-4 code that ensures signal 
+           integrity under normal transmission contitions. CRC-4 errors are 
+           computed by the receiver on each received CRC-4 multiframe block 
+           (eight regular E1 frames). If the computed code does not match the 
+           received one, an ECRC is accounted. The T1 frame (1544 kb/s) also 
+           has its own CRC-6 protection mechanism. The 'crc' event does not 
+           apply to frames not carrying CRC codes.
+
+         - 'rebe': Remote End Block Error anomaly. In E1 (2048 kb/s interfaces) 
+           this anomaly is raised if the first bit of the frames 14 or 16 of the 
+           16-frame CRC-4 multiframe is set to 0. This anomaly indicates that an 
+           error has been found in a CRC-4 block in the opposite transmission 
+           direction by the remote end. In other words, this error is an 
+           indicator of trans mission errors in the opposite transmission 
+           direction. If the REBE anomaly is supported by other interface, it 
+           may use other mechanim but a REBE always indicates an anomaly 
+           detected in the opposite transmission direction.
+
+         - 'tse': The Test Sequence Error (TSE) is equivalent to a single bit
+           difference between the transmitted and the received test pattern
+           (PRBS or other) in a Bit Error Ratio (BER) test. TSE errors depend 
+           on sinthetic test patterns and it is not available if the test 
+           interface is carrying live traffic.
+           
+         - 'frm': Framing error, used in V.24 asynchronous datacom
+           interfaces, consist of an invalid start/stop bit sequence.
+           
+         - 'prty' : Parity errors, used in V.24 asynchronous datacom
+           interfaces.
+           "
+    SYNTAX            INTEGER {
+                          none (0),
+                          code (1),
+                          fas (2),
+                          mfas (3),
+                          crc (4),
+                          rebe (5),
+                          tse (6),
+                          frm (7),
+                          prty (8)
+                      }
+
+TdmDefect ::=TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Defines and lists defects typically detected in TDM interfaces such as  
+         ITU-T G.703 2048 kb/s, codirectional, contradirectional and centralized 
+         interfaces, ANSI T1-102-1999 1544 kb/s, data communications and IEEE 
+         C37.94. The defects identified by this textual convention are:
+
+         - 'none': Corresponds with a no defect state. If no other defect has 
+           been added or detected in the TDM signal, then it is declared to be 
+           in a 'none' defect state.
+
+         - 'los': Loss of signal defect. This defect is detected when no signal 
+           is detected in the receiver input. The 'true' status of this field
+           corresponds with the presence of the defect in the signal.
+
+         - 'ais': Alarm indication signal. It is defined as an all-1 line 
+           signal. All bits are set to '1'. The AIS indicates a failure in the 
+           transmission source that does not allow transmission of user data 
+           towards the destination. For example, a regenerator that detects a 
+           LOS at its input may send an AIS downstream.
+
+         - 'lof': Loss of frame. This defect is raised when for some reason the 
+           analyser is unable to find the periodic FAS pattern in the incoming 
+           signal. LOF is an indication of framing problems in a network device 
+           due to a faulty line card or other reasons.
+
+         - 'rdi': Remote defect indication: It is an defect carried in the 
+           A-bits within the G.704 2048 kb/s frame. The RDI is raised when the 
+           A-bits are set to '1' by the transmitter. The RDI indicates that 
+           there is a failure in the transmission source that does not allow 
+           data transmission towards the origin. For example, a regenerator that 
+           detects a LOS at its input may send a RDI upstream.
+
+         - 'crclom': CRC loss of multiframe. The E1 16-frame CRC multframe uses 
+           a fixed bit sequence (001011 binary) carried in frames 1, 3,5,7,9 and 
+           11 for framing purposes. The CRC-LOM is declared when the CRC-4 
+           framing sequence is not found in the incoming signal. This defect
+           usually indicates that the analysed frame lacks of CRC-4 multiframe
+           structure. The CRC-LOM defect applies only to 2048 kb/s frames 
+           carrying a CRC multiframe.
+
+         - 'caslom': CAS loss of multiframe. The 2048 kb/s 16-frame CAS 
+           multiframe uses a fixed bit sequence (0000 binary) carried in the 
+           first four bytes of frame 0 for frame alignment purposes. The CAS-LOM 
+           is declared when the CAS framing sequence is not found in the 
+           incoming signal. This error usually indicates that the analysed 
+           frame lacks of CAS multiframe structure. This defects applies only 
+           to E1 frames carrying a CAS multiframe.
+
+         - 'mais': Multiframe AIS. This alarm is raised in case that an all-1 
+           line signal is detected within the TS16 when a frame structure with 
+           CAS multiframe is configured. The MAIS indicates a failure in the 
+           transmission source that does not allow transmission of CAS 
+           information toward the destination. This defect applies only to E1 
+           frames carrying a CAS multiframe
+
+         - 'mrdi': Multiframe Remote Alarm Indication. It is an alarm condition 
+           carried in the A-bit within TS16 in the G.704 2048 kb/s frame. The 
+           MRDI is raised  when the A-bit are set to '1' by the transmitter. 
+           MRDI defect generation or detection is disabled when the configured
+           frame structure does not carry the CAS multiframe in TS16. The MRAI 
+           indicates that there is a failure in the transmission source that 
+           does not allow transmission of the CAS multiframe towards the origin.
+
+         - 'slip': Either one bit is missing or repeated in the received test 
+           pattern. This error is usually related with timing problems within 
+           the network.
+
+         - 'lss': Loss of sequence synchronization. This event indicates that 
+           the expected test pattern does not match the actually received 
+           pattern.
+
+         - 'all0': This defect occurs when all the user bit capacity is set to 
+           '0'. Note that in E1 frames TS0 and TS16 (if CAS is used) do not need 
+           to be all '0' to declare the 'All 0' condition. In other frames 
+           carrying overhead bytes it applies the same principle.
+
+         - 'all1': This defect occurs when all the user bit capacity is set to 
+           '1'. Note that in E1 frames TS0 and TS16 (if CAS is used) do not need 
+           to be all '1' to declare the 'All 1' condition.  In other frames 
+           carrying overhead bytes it applies the same principle."
+    SYNTAX            INTEGER {
+                          none (0),
+                          los (1),
+                          ais (2),
+                          lof (3),
+                          rdi (4),
+                          crclom (5),
+                          caslom (6),
+                          mais (7),
+                          mrdi (8),
+                          slips (9),
+                          lss (10),
+                          all0 (11),
+                          all1 (12)
+                      }
+
+--
+-- Top level module structure
+--
+
+tdmImpControl      OBJECT IDENTIFIER ::= { tdmImpairment 1 }
+
+--
+-- Impairment insertion control group
+--
+
+tdmImpEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts / Stops the event insertion of the currently configured
+         impairments. Once it has been enabled, 'tdmImpEnable' could be 
+         automatically disabled once event insertion has finised or it could 
+         continue until 'tdmImpEnable' is configured to 'false' by an external 
+         controlling device."
+     ::= { tdmImpControl 1 }
+
+tdmImpTarget OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the port or stream where the impairment is to be applied. 
+         There is a correspondence between the configuration options available 
+         for this OID and the 'tdmPortModeTable' port / interface / stream list 
+         from the 'ATSL-TDM-PORT-MIB'. This OID is to be configured with one of 
+         the 'tdmPortModeBlockName' from this table."
+     ::= { tdmImpControl 2 }
+
+--
+--  Anomaly insertion configuration table
+--
+
+tdmImpAnomaliesTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdmImpAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures anomaly insertion in different modes (single, rate, burst, 
+         continuous burst). An anomaly is defined as the smallest discrepancy 
+         which can be observed between the actual and desired characteristics in 
+         the TDM frame structure or content. The occurrence of a  single anomaly 
+         does not constitute an interruption in the ability to perform a 
+         required function but it may involve temporary transmission performance 
+         degradation."
+    ::= { tdmImpairment 2 }
+
+tdmImpAnomaliesEntry OBJECT-TYPE
+    SYNTAX            TdmImpAnomaliesEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing anomaly generation applicable to a particular 
+         impairment block."
+    INDEX { tdmImpAnomaliesIndex }
+    ::= { tdmImpAnomaliesTable 1 }
+
+TdmImpAnomaliesEntry ::= SEQUENCE {
+    tdmImpAnomaliesIndex          TableIndex,
+    tdmImpAnomaliesBlockName      DisplayString,
+    tdmImpAnomaliesEvent          TdmAnomaly,
+    tdmImpAnomaliesMode           INTEGER,
+    tdmImpAnomaliesRate           RatioPercentage,
+    tdmImpAnomaliesBurstLength    Unsigned32,
+    tdmImpAnomaliesStatus         RowStatus
+}
+
+tdmImpAnomaliesIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each loss insertion block,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { tdmImpAnomaliesEntry 1 }
+
+tdmImpAnomaliesBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { tdmImpAnomaliesEntry 2 }
+
+tdmImpAnomaliesEvent OBJECT-TYPE 
+    SYNTAX            TdmAnomaly
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the event to be inserted. It is one of the accepted values 
+         of the 'TdmAnomaly' textual convention. Some interfaces and some frame 
+         structures may not support insertion of certain anomalies. For 
+         example, unstructured datacom interfaces do not support insertion of 
+         FAS anomalies. E1 frames not carrying a CRC multiframe (PCM30, PCM31) 
+         do not accept CRC anomaly insertion."
+    ::= { tdmImpAnomaliesEntry 3 }
+
+tdmImpAnomaliesMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none (0),
+                          single (1),
+                          rate (2),
+                          burst (3),
+                          continuousBurst (4)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies to the managed device the way the anomalies are inserted 
+         into the corresponding traffic stream. The available choices are the 
+         following:
+
+         - 'none': No specific insertion mode is configured. No event will be 
+           inserted when 'tdmImpEnable' is configured to 'true'.
+
+         - 'single': A single event is inserted. Event insertion is triggered
+           when the 'tdmImpEnable' key is set to 'true'.
+
+         - 'rate': Events are inserted with a configurable rate. Insertion is 
+           deterministic (the time interval between consecutive events is a 
+           constant). Insertion starts if 'tdmImpEnable' is configured to 
+           'true' and it stops when configured to 'false'.
+
+         - 'burst: A burst of anomalies with of configurable length is 
+           inserted. The burst is triggered by setting 'tdmImpEnable' to 'true'.
+
+        - 'continuousBurst': Generates a burst of configurable length every
+          second. Insertion starts if 'tdmImpEnable' is configured to 
+          'true' and it stops when configured to 'false'."
+    ::= { tdmImpAnomaliesEntry 4 }
+
+tdmImpAnomaliesRate OBJECT-TYPE
+    SYNTAX            RatioPercentage
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "If the 'psnImpAnomaliesMode' is set to 'rate', this OID is the 
+         ratio of anomalies to the total insertion possibilities. For example, 
+         if the event to be inserted is a TSE, this value accounts for the 
+         number of TSE anomalies to the total test pattern bits but if the 
+         event is a CRC anomaly then there is one insertion possibility for 
+         each eight frames (one CRC-4 submultiframe) and then this OID 
+         configures the ratio of CRC-4 anomalies to the total amount of CRC-4 
+         submultiframes."
+    ::= { tdmImpAnomaliesEntry 5 }
+
+tdmImpAnomaliesBurstLength OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies how many frames make up an event burst when the anomaly 
+         insertion mode is either 'burst' or 'continuousBurst'."
+    ::= { tdmImpAnomaliesEntry 6 }
+
+tdmImpAnomaliesStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'tdmAnomaliesLossTable'. Enables dynamic creation 
+         / deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdmImpAnomaliesEntry 7 }
+
+--
+--  Defect insertion configuration table
+--
+
+tdmImpDefectsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF TdmImpDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Configures defect generation event in different modes (single, rate, 
+         burst, continuous burst). A defect is declared when the density of 
+         anomalies has reached a level where the ability to perform a required 
+         function has been interrupted. Defects are usually persistent 
+         indication of a fault that clear only when the triggering condition 
+         has been resolved.
+
+         In the particular case of E1 transmission systems, typical examples
+         of defects are the loss of signal (LOS), loss of frame (LOF) and the
+         alarm indication signal (AIS)."
+    ::= { tdmImpairment 3 }
+
+tdmImpDefectsEntry OBJECT-TYPE
+    SYNTAX            TdmImpDefectsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing anomaly generation applicable to a particular 
+         impairment block."
+    INDEX { tdmImpDefectsIndex }
+    ::= { tdmImpDefectsTable 1 }
+
+TdmImpDefectsEntry ::= SEQUENCE {
+    tdmImpDefectsIndex            TableIndex,
+    tdmImpDefectsBlockName        DisplayString,
+    tdmImpDefectsEvent            TdmDefect,
+    tdmImpDefectsMode             INTEGER,
+    tdmImpDefectsMcount           Unsigned32,
+    tdmImpDefectsNcount           Unsigned32,
+    tdmImpDefectsStatus           RowStatus
+}
+
+tdmImpDefectsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each loss insertion block,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { tdmImpDefectsEntry 1 }
+
+tdmImpDefectsBlockName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an interface
+         text name, such as 'eth0' or a stream identifier such as 'eth0.0'
+         depending on the capabilities available in the managed entity.
+
+         Other impairment, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { tdmImpDefectsEntry 2 }
+
+tdmImpDefectsEvent OBJECT-TYPE 
+    SYNTAX            TdmDefect
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Configures the event to be inserted. It is one of the accepted values 
+         of the 'TdmDefect' textual convention. Some interfaces and some frame 
+         structures may not support insertion of certain anomalies. For 
+         example, T1 interfaces do not support insertion of CRC defects."
+    ::= { tdmImpDefectsEntry 3 }
+
+tdmImpDefectsMode OBJECT-TYPE 
+    SYNTAX            INTEGER {
+                          none (0),
+                          continuous (1),
+                          burst (2),
+                          continuousBurst (3)
+                      }
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Specifies to the managed device the way the defectss are inserted 
+         into the corresponding traffic stream. The available choices are the 
+         following:
+
+         - 'none': No specific insertion mode is configured. No event will be 
+           inserted when 'tdmImpEnable' is configured to 'true'.
+
+         - 'continuous': Event is continuously inserted when the 'tdmImpEnable'
+           is configured to 'true'. To stop continuous insertion 'tdmImpEnable' 
+           has to be configured to 'false'.
+
+         - 'burst': The event is inserted in M consecutive insertion 
+           opportunities. The exact definition of an insertion opportunity 
+           depends on the particular event to be inserted. Some alarms can be 
+           inserted once per frame, others are inserted once per CRC multiframe 
+           and some others once per CAS multiframe. Insertion is triggered by
+           setting 'tdmImpEnable' to 'true'.
+
+         - 'continuousBurst': Event insertion is periodic. The event is 
+           inserted in M consecutive opportunities. The agent then waits
+           for N insertion opportunities before starting from the beginning.
+           Insertion is started / stopped with the help of 'tdmImpEnable'."
+    ::= { tdmImpDefectsEntry 4 }
+
+tdmImpDefectsMcount OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Number of consecutive times a defect is inserted when 'burst' or 
+         'continuousBurst' insertion modes are selected."
+    ::= { tdmImpDefectsEntry 5 }
+
+tdmImpDefectsNcount OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Number of consecutive insertion opportunities the tester waits between 
+         anomaly bursts when 'continuousBurst' insertion is selected."
+    ::= { tdmImpDefectsEntry 6 }
+
+tdmImpDefectsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'tdmImpDefectsTable'. Enables dynamic creation / 
+         deletion of table entries in the current table. Information contained
+         in the table entry may not be available for read / write operations if
+         the status column is set to something different to 'active'. See the
+         REFERENCEd documents to get more information about the ancoding and use
+         of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { tdmImpDefectsEntry 7 }
+END

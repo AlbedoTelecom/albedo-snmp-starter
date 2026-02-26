@@ -1,0 +1,290 @@
+ATSL-LOG-FILES-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Log File Management.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter64               FROM SNMPv2-SMI
+    DisplayString, RowStatus                              FROM SNMPv2-TC
+    TableIndex                                            FROM ATSL-MIB
+    fileClasses, FileAction, FileOpsResult                FROM ATSL-FILEMGR-MIB;
+
+logFiles MODULE-IDENTITY
+    LAST-UPDATED "202206070000Z" -- 7 June, 2022
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+
+    DESCRIPTION
+        "This MIB module provides resources for browsing and executing basic
+		  file management operations on log files.  These files contain
+		  the textual information about the alarms and events occurred in the
+		  managed unit.
+		"
+
+    REVISION     "202206070000Z" -- 7 June, 2022
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { fileClasses 4 }
+
+--
+--  Table of log files (listing)
+--
+
+logFilesListTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF LogFilesListEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table lists all log files present in the test unit
+		 or in any removable device attached to the unit.  Each row of the
+		 table represents a different file."
+
+    ::= { logFiles 1 }
+
+logFilesListEntry OBJECT-TYPE
+    SYNTAX            LogFilesListEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information for each log file
+		 stored in the test unit or in a removable storage unit attached to
+		 it."
+
+    INDEX { logFilesListIndex }
+    ::= { logFilesListTable 1 }
+
+LogFilesListEntry ::= SEQUENCE {
+    logFilesListIndex          TableIndex,
+    logFilesListName           DisplayString,
+    logFilesListDevice         DisplayString,
+    logFilesListCreationDate   DisplayString,
+    logFilesListSize           Counter64,
+    logFilesListURL            DisplayString,
+    logFilesListStatus         RowStatus
+}
+
+logFilesListIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each file in the unit,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { logFilesListEntry 1 }
+
+logFilesListName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the file as it appears in the test unit's filesystem,
+		 relative to the directory it is contained in. The name of the file
+		  must be used as a reference for subsequent operation on this file."
+
+    ::= { logFilesListEntry 2 }
+
+logFilesListDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The name of the device the file resides in. The device name is
+		determined by the architecture of the managed unit and it must be
+		used as a reference for subsequent operation on this file so that a
+		file is uniquely referenced."
+
+    ::= { logFilesListEntry 3 }
+
+logFilesListCreationDate OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the creation time of the file"
+    ::= { logFilesListEntry 4 }
+
+logFilesListSize OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the size of the file in bytes."
+    ::= { logFilesListEntry 5 }
+
+logFilesListURL OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Indicates the download URL of this file. An external application
+		 can download this file via HTTP using the URL specified in this column.
+		 Note, however, that this URL must be prefixed with the protocol and
+		 host name or IP address of the managed unit, for example, if the
+		 URL listed in this OID is 'somedir/somefile.txt', the actual URL
+		 would look like 'http://192.168.1.1/somedir/somefile.txt', where
+		 192.168.1.1 is the IP address of the managed unit.
+		"
+    ::= { logFilesListEntry 6 }
+
+logFilesListStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'logFilesListTable'. As this is a read-only
+		 table, the only value supported is 'active'."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { logFilesListEntry 7 }
+
+--
+--  Table of operations on Log files 
+--
+
+logFilesOpsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF LogFilesOpsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table is the interface provided to perform operations on log
+	    files.  A client wishing to do an operation on a particular file
+	    should first look up the file in the logFilesListTable.
+
+	    Then, a new row must be created in this table and set the FileName
+	    and Device cells to the file name and device name of the file that
+	    should get the action, as they appear in the ListTable. An Action
+	    must be set as well, which indicates which operation must be done
+	    on the specified file.
+
+	    If necessary, the Arg cell must be set if the operation requires an
+	    argument, such as the new file name when renaming files.
+
+	    Then, the client must trigger the file operation by setting the
+	    RowStatus cell to 'active'.  The status of the action will be
+	    loged in the Result cell.  Finally, the client must remove the
+	    row from the table by setting the RowStatus cell to 'destroy'.
+
+		The client is responsible for removing the unused table rows,
+		otherwise the maximum number of rows would be eventually reached,
+		preventing the creation of new rows."
+
+    ::= { logFiles 2 }
+
+logFilesOpsEntry OBJECT-TYPE
+    SYNTAX            LogFilesOpsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing basic information on a file operation
+		 requested by any client."
+
+    INDEX { logFilesOpsIndex }
+    ::= { logFilesOpsTable 1 }
+
+LogFilesOpsEntry ::= SEQUENCE {
+    logFilesOpsIndex          TableIndex,
+    logFilesOpsFileName       DisplayString,
+    logFilesOpsDevice         DisplayString,
+    logFilesOpsArgs           DisplayString,
+    logFilesOpsAction         FileAction,
+    logFilesOpsResult         FileOpsResult,
+    logFilesOpsStatus         RowStatus
+}
+
+logFilesOpsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each different operation
+		that takes place simultaneously.  Index values must start at 1 but
+		can be re-used as finished operations are flushed from the table.  A
+		client that wants to request a new file operation would typically
+		try index 1, if it is present in the table, it would try index 2,
+		and so on, until a free index is found."
+
+    ::= { logFilesOpsEntry 1 }
+
+logFilesOpsFileName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the file that will be the object of the operation. It
+		must be the same name as it appears in the ListTable."
+
+    ::= { logFilesOpsEntry 2 }
+
+logFilesOpsDevice OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The name of the device where the file that will be the object of
+		the operation is stored.  It must be the same device as it appears in the
+		ListTable."
+
+    ::= { logFilesOpsEntry 3 }
+
+logFilesOpsArgs OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "An optional argument required by the operation. For example, the
+		new file name when a file is renamed."
+
+    ::= { logFilesOpsEntry 4 }
+
+logFilesOpsAction OBJECT-TYPE
+    SYNTAX            FileAction
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "The operation to be performed on the specified file. Setting this
+		cell to a non-idle action triggers the operation."
+
+    ::= { logFilesOpsEntry 5 }
+
+logFilesOpsResult OBJECT-TYPE
+    SYNTAX            FileOpsResult
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This cell indicates the result of the operation after it is
+		triggered by the Action cell."
+
+    ::= { logFilesOpsEntry 6 }
+
+logFilesOpsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'logFilesOpsTable'. Enables dynamic
+         creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCEd documents to get more
+         information about the ancoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+
+    ::= { logFilesOpsEntry 7 }
+
+END

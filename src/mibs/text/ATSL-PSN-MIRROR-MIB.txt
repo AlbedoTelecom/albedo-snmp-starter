@@ -1,0 +1,358 @@
+ATSL-PSN-MIRROR-MIB DEFINITIONS ::= BEGIN
+
+--
+-- ATSL MIB objects for Ethernet / IP traffic mirroring or capture.
+--
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32, Counter64   FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, DisplayString, TruthValue,
+    RowStatus                                             FROM SNMPv2-TC
+    atslGeneral, TableIndex                               FROM ATSL-MIB;
+
+psnMirror MODULE-IDENTITY
+    LAST-UPDATED "201404090000Z" -- 09 April, 2014
+    ORGANIZATION "www.albedotelecom.com"
+    CONTACT-INFO    
+        "Francisco J. Hens
+         fhr@albedotelecom.com
+
+         Tel: +34 932 212 873
+         Fax: +34 932 210 924
+
+         ALBEDO Telecom SL
+         C/ Joan d'Austria 112;
+         08018 Barcelona - Spain"
+    DESCRIPTION
+        "This MIB module provides resources to mirror IP / Ethernet traffic from
+         one or various line ports to a set of mirror ports. When mirroring is
+         enabled, traffic is duplicated to the corresponding mirror port(s).
+
+         Traffic capture is considered an special type of mirroring where the
+         destination port(s) is replaced by an storage device where traffic from
+         the line ports is aggregated and copied.
+
+         The structure of this MIB module is made up of several nodes containing
+         different kinds of information. Specifically, the current MIB module
+         provides interaction with the managed entity through the following
+         nodes, each of them containing different OIDs:
+
+         - 'psnMirrorControl': This is a configuration group that contains
+         writable OIDs and enables the user to establish the way the mirroring
+         or capture process operates.
+ 
+         - 'psnMirrorCaptureStats': Contains different statistics and status
+         information related with captures when the management entity supports
+         traffic capturing. Objects under this node may be referred to the
+         whole managed entity or one of the associated subsystems (a port, a
+         traffic stream). All global objects are defined as scalars. Objects
+         with narrower scope are included in the 'psnMirrorCaptureStatsTable'.
+         All OIDs included in this group are not writable.
+
+         - 'psnMirrorStorageStats': Contains different statistics and status
+         information related with storage devices such as Hard Disk Drives
+         (HDDs), Solid State Devices (SSDs) or any other. All the OIDs in
+         this group are read-only.
+
+        ALBEDO Telecom testers currently implementing this MIB module are
+        listed below:
+
+        - Net.Shark GbE Filtering and Aggregation Tap.
+        - Net.Hunter Network Capture Device."
+    REVISION     "201404090000Z" -- 09 April, 2014
+    DESCRIPTION
+        "Draft 1 public. Latest version available"
+
+    ::= { atslGeneral 14 }
+
+--
+-- Textual conventions
+--
+
+MirrorMode ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the available mirror modes for a traffic mirroring / capture
+         entity. Currently, there are three different accepted operation modes:
+
+         - 'mirror': Traffic from a line port is copied to a dedicated mirror
+           port. Mirror ports do not change the frame content in any way and
+           usually, they respect frame timing (distance between consecutive
+           frames) as well.
+
+         - 'aggregate': Traffic from two or more line ports is copied to a
+           shared mirror port. The shared mirror port do not change the frame
+           content as long as it is not overloaded by the traffic forwarded
+           from the line ports. Frame timing may be modified when frames from
+           different sources have to be placed within a single stream.
+
+         - 'store*': Traffic from one or more line ports is copied to a
+           permanent storage device. Frame content may be modified depending
+           on the specific capabilities of the storage device. Data may be
+           timestamped to enable the user to know when each specific frame
+           has been received. If this OID is set to 'storeSD', the traffic
+           captured is copied to the SD-Card removable device. If set to
+           'storeSSD', then it is copied to the internal Solid-State Disk.
+		"
+    SYNTAX            INTEGER {
+                          mirror (0),
+                          aggregate (1),
+                          storeSD (2),
+                          storeSSD (3)
+                      }
+
+MirrorCaptureStatus ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+        "Encodes the possible capture status for a traffic mirroring / capture
+         entity. Currently, there are four different statuses:
+
+         - 'idle': The entity is not capturing.
+
+         - 'capturing': The entity is capturing frames.
+
+         - 'noMedia': No storage media is present.
+
+         - 'noSpace': No storage media is present."
+
+    SYNTAX            INTEGER {
+                          idle (0),
+                          capturing (1),
+                          noMedia (2),
+                          noSpace (3)
+                      }
+
+
+--
+-- Top level module structure
+--
+
+psnMirrorControl OBJECT IDENTIFIER ::= { psnMirror 1 }
+
+psnMirrorCaptureStats OBJECT IDENTIFIER ::= { psnMirror 2 }
+
+psnMirrorStorageStats OBJECT IDENTIFIER ::= { psnMirror 3 }
+
+--
+-- Mirror / capture control group
+--
+
+psnMirrorTapEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "In devices supporting traffic forwarding between two or more line
+         ports, this field enables or disables forwarding. When traffic
+         forwarding is enabled, the managed device behaves like a tap. Data
+         is transparently retransmitted to a different port and at the same
+         time, part or all this traffic is mirrored or stored. Disabling traffic
+         forwarding, prevents the equipment to send the traffic to any output
+         other than the mirror port or the storage device."
+    ::= { psnMirrorControl 1 }
+
+psnMirrorCaptureEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Starts and stops a capture in the managed device. If there is a capture
+         running, the managed entity attempts to store al the selected traffic
+         in a storage device.
+
+         Some configuration parameters may be blocked by the managed device when
+         capturing. Some operation modes different to traffic capture
+         (forwarding to a mirror port, for example) may not require the user
+         to enable 'psnMirrorCaptureEnable' to work."
+    ::= { psnMirrorControl 2 }
+
+psnMirrorMode OBJECT-TYPE
+    SYNTAX            MirrorMode
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Selects between the different modes available for mirroring data
+         from one or several line port. Some of the available functions 
+         configurable from this field are traffic aggregation or storage."
+    ::= { psnMirrorControl 3 }
+
+psnMirrorWrapAroundEnable OBJECT-TYPE
+    SYNTAX            TruthValue
+    MAX-ACCESS        read-write
+    STATUS            current
+    DESCRIPTION
+        "Enables or disables the wrap-around operation in the internal storage
+         in such managed entities capable of storing data and supporting this
+         write mode. If wrap around is enabled, the capture continues once the
+         storage space is exhausted by overwritting old or outdated 
+         information."
+    ::= { psnMirrorControl 4 }
+--
+-- Capture status and statistics group
+--
+
+psnMirrorCapturing OBJECT-TYPE
+    SYNTAX            MirrorCaptureStatus
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This field shows whether the equipment is copying frames to the
+         storage device or it is stopped by any error condition."
+
+    ::= { psnMirrorCaptureStats 1 }
+
+psnMirrorRemainingCapacity OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Displays the capacity available in the storage device for new captures
+         expressed in bytes."
+    ::= { psnMirrorCaptureStats 2 }
+
+psnMirrorCaptureSize OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "bytes"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Shows the current capture size expressed in bytes."
+    ::= { psnMirrorCaptureStats 3 }
+
+--
+--  Capture status table
+--
+
+psnMirrorCaptureStatsTable OBJECT-TYPE
+    SYNTAX            SEQUENCE OF PsnMirrorCaptureStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "This table contains all the capture statistics and status information
+         depending on the stream. The management device may potentially capture
+         from several ports. And even in captures from a single port, it may
+         keep separated statistics for different data streams defined by means
+         of a filter rule set or other means."
+    ::= { psnMirrorCaptureStats 4 }
+
+psnMirrorCaptureStatsEntry OBJECT-TYPE
+    SYNTAX            PsnMirrorCaptureStatsEntry
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "Table entry containing capture statistics and status information
+         applicable to a particular subsystem (port, stream) in the managed
+         entity."
+    INDEX { psnMirrorCaptureStatsIndex }
+    ::= { psnMirrorCaptureStatsTable 1 }
+
+PsnMirrorCaptureStatsEntry ::= SEQUENCE {
+    psnMirrorCaptureStatsIndex    TableIndex,
+    psnMirrorCaptureStatsStreamName DisplayString,
+    psnMirrorCaptureStatsSuppressed Counter64,
+    psnMirrorCaptureStatsStatus   RowStatus
+}
+
+psnMirrorCaptureStatsIndex OBJECT-TYPE
+    SYNTAX            TableIndex
+    MAX-ACCESS        not-accessible
+    STATUS            current
+    DESCRIPTION
+        "A unique value, greater than zero, for each filter control block,
+         It is recommended that values are assigned contiguously starting
+         from 1. The value for each block index must remain constant at
+         least from one re-initialization of the entity's network management
+         to the next re-initialization."
+    ::= { psnMirrorCaptureStatsEntry 1 }
+
+psnMirrorCaptureStatsStreamName OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "The textual name of the processing block. This might be an
+         interface text name, such as 'eth0' or a stream identifier such as
+         'eth0.0' depending on the capabilities available in the managed
+         entity.
+
+         Other capture, filtering or statistics block associated to the
+         same traffic stream within the same managed device must use the
+         same textual name to identify the stream whenever possible."
+    ::= { psnMirrorCaptureStatsEntry 2 }
+
+psnMirrorCaptureStatsSuppressed OBJECT-TYPE
+    SYNTAX            Counter64
+    UNITS             "frames"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Accounts for the number of filtered line frames lost due to
+         insufficient mirror / capture channel capacity. Frames may be lost if
+         the mirror port bit rate is smaller than the line port capacity.
+         Frames are more likely to be lost when aggregation is used to add the
+         traffic from both transmission directions."
+    ::= { psnMirrorCaptureStatsEntry 3 }
+
+psnMirrorCaptureStatsStatus OBJECT-TYPE
+    SYNTAX            RowStatus
+    MAX-ACCESS        read-create
+    STATUS            current
+    DESCRIPTION
+        "Status column for the 'psnMirrorCaptureStatsTable'. Enables dynamic
+         creation / deletion of table entries in the current table.
+         Information contained in the table entry may not be available for 
+         read / write operations if the status column is set to something
+         different to 'active'. See the REFERENCEd documents to get more
+         information about the ancoding and use of the status column."
+    REFERENCE 
+        "- IETF RFC 2579: 'Textual Conventions for SMIv2'."
+    ::= { psnMirrorCaptureStatsEntry 4 }
+
+--
+-- Storage device status and statistics group
+--
+
+psnMirrorStorageFirmware OBJECT-TYPE
+    SYNTAX            DisplayString
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Firmware version that corresponds with the storage device installed
+         in the managed entity, if this information is available. This firmware
+         version may be different to general firmware version corresponding to
+         the managed entity."
+    ::= { psnMirrorStorageStats 1 }
+
+psnMirrorStoragePowerOn OBJECT-TYPE
+    SYNTAX            Unsigned32
+    UNITS             "hours"
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "Accounts for the time (in hours) the capture storage device has
+         been in on status, if this information is available."
+    ::= { psnMirrorStorageStats 2 }
+
+psnMirrorStorageWearout OBJECT-TYPE
+    SYNTAX            Unsigned32
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This number is an indication of the internal storage age. This
+         parameter is meaningful if this storage is based on Solid State
+         Drive (SSD) technology.  The more used is the SSD, the larger is
+         the value of the wearout indicator."
+    ::= { psnMirrorStorageStats 3 }
+
+psnMirrorStorageWrites OBJECT-TYPE
+    SYNTAX            Counter64
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This register contains information about how much information has
+         been written in the SSD since it was installed in the managed
+         entity, in gigabytes."
+    ::= { psnMirrorStorageStats 4 }
+
+END
