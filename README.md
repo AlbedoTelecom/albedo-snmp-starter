@@ -102,7 +102,7 @@ examples build on.
 
 - [`docs/ALBEDO_MIB_Reference.md`](docs/ALBEDO_MIB_Reference.md) — OID catalogue covering all 34 ALBEDO MIB modules: purpose, key tables, dependencies, and automation use cases.
 - [`docs/ALBEDO_CORE-FILES_REFERENCE.md`](docs/ALBEDO_CORE-FILES_REFERENCE.md) — Complete API reference for `albedo_mib_core` and `albedo_snmp_core`, including method signatures, args tables, design notes, and troubleshooting.
-- [ALBEDO Telecom SNMP documentation](https://www.albedo.com) — Official vendor SNMP documentation for xGenius and Net.Time devices.
+- [ALBEDO Telecom SNMP documentation](https://www.albedotelecom.com) — Official vendor SNMP documentation for xGenius, Zeus and Net.Time devices.
 
 ---
 
