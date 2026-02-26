@@ -8,12 +8,11 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Requirements & Installation](#2-requirements--installation)
-3. [Quick Start](#3-quick-start)
-4. [Module Reference: `albedo_mib_core`](#4-module-reference-albedo_mib_core)
-5. [Module Reference: `albedo_snmp_core`](#5-module-reference-albedo_snmp_core)
-6. [Common Patterns & Recipes](#6-common-patterns--recipes)
-7. [Troubleshooting](#7-troubleshooting)
+2. [Quick Start](#2-quick-start)
+3. [Module Reference: `albedo_mib_core`](#3-module-reference-albedo_mib_core)
+4. [Module Reference: `albedo_snmp_core`](#4-module-reference-albedo_snmp_core)
+5. [Common Patterns & Recipes](#5-common-patterns--recipes)
+6. [Troubleshooting](#6-troubleshooting)
 
 ---
 
@@ -33,71 +32,7 @@ exposes `get`, `set`, `walk`, and RowStatus table operations as simple awaitable
 
 ---
 
-## 2. Requirements & Installation
-
-### Python version
-
-Python **3.8 or later** is required (async/await, `pathlib`, `importlib`).
-
-### Required packages
-
-```bash
-# Core SNMP library (must be 7.1.x — the async API used here is not compatible with 6.x)
-pip install pysnmp==7.1
-
-# MIB compiler (required to compile ALBEDO .txt MIB files to Python)
-pip install pysmi
-```
-
-> **Tip:** If you only need to run scripts against already-compiled MIBs (e.g. in a Docker image
-> where compilation has already been done), `pysmi` is optional at runtime. It is only imported
-> inside `compile_mib()` and its absence is reported as a clear `ImportError`.
-
-### Required directory layout
-
-Both modules resolve MIB paths **relative to their own location on disk** (see
-[Design Notes](#design-notes) in section 4). The `mibs/` subtree must be a sibling of the two
-`.py` files:
-
-```
-albedo-snmp-starter/
-├── docs
-│   ├── ALBEDO_MIB_Reference.md
-│   └── REFERENCE.md
-├── examples
-│   ├── ex01_device_info.py
-│   ├── ex02_read_albedo_mibs.py
-│   ├── ex03_write_with_verify.py
-│   ├── ex04_walk_table.py
-│   ├── ex05_multifunction.py
-│   ├── ex06_mib_manager.py
-│   └── ex07_table_operation.py
-├── README.md
-├── requirements.txt
-├── src
-│   ├── albedo_mib_core.py
-│   ├── albedo_snmp_core.py
-│   └── mibs
-│       ├── compiled
-│       └── text
-
-
-```
-
-`mibs/compiled/` is created automatically by `AlbedoMibManager` if it does not exist — you do
-not need to create it yourself.
-
-### Co-location requirement
-
-**Both `albedo_mib_core.py` and `albedo_snmp_core.py` must reside in the same directory.**
-`albedo_snmp_core` imports its companion by prepending `Path(__file__).parent` to `sys.path` at
-module load time. If the files are in different directories the import silently falls back to a
-degraded mode where ALBEDO MIB names cannot be resolved (see
-[Graceful Degradation](#design-notes-1) in section 5).
-
----
-
-## 3. Quick Start
+## 2. Quick Start
 
 The following script is fully self-contained and runnable. It compiles any MIBs that have not
 been compiled yet, connects to a device, reads and writes a value, then cleans up automatically
@@ -137,7 +72,7 @@ asyncio.run(main())
 
 ---
 
-## 4. Module Reference: `albedo_mib_core`
+## 3. Module Reference: `albedo_mib_core`
 
 ### `AlbedoMibManager`
 
@@ -383,7 +318,7 @@ search list, regardless of timing.
 
 ---
 
-## 5. Module Reference: `albedo_snmp_core`
+## 4. Module Reference: `albedo_snmp_core`
 
 ### Module-level constants
 
@@ -743,7 +678,7 @@ import — if you see it, check that both files are in the same directory.
 
 ---
 
-## 6. Common Patterns & Recipes
+## 5. Common Patterns & Recipes
 
 ### Recipe 1 — Walking a results table
 
@@ -874,7 +809,7 @@ print(result)
 
 ---
 
-## 7. Troubleshooting
+## 6. Troubleshooting
 
 ### `MibNotFoundError` or `RuntimeError: Could not load MIB module '…'`
 
