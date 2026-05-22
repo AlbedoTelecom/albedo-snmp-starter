@@ -1,4 +1,4 @@
-ATSL-PSN-PORT-CONFIG-MIB DEFINITIONS ::= BEGIN
+ATSL-PSN-PORT-MIB DEFINITIONS ::= BEGIN
 
 --
 -- ATSL MIB objects for Ethernet / IP port configuration

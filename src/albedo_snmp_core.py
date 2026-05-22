@@ -66,6 +66,26 @@ def _get_mib_manager():
         _mib_manager = _AlbedoMibManagerClass()
     return _mib_manager
 
+def _find_mib_root_oid(mgr, mib_name: str) -> str | None:
+    """
+    Return the root OID for a MIB module — the symbol with the shortest OID tuple.
+
+    Used by walk() when no table_name is given, so the walk covers the entire MIB.
+    Loads the module first if it is not already in mibSymbols.
+    """
+    if mib_name not in mgr.mib_builder.mibSymbols:
+        if not mgr.load_mib(mib_name):
+            return None
+    symbols = mgr.mib_builder.mibSymbols.get(mib_name, {})
+    best_oid: str | None = None
+    best_len = float('inf')
+    for obj in symbols.values():
+        if hasattr(obj, 'getName'):
+            oid_tuple = obj.getName()
+            if oid_tuple and len(oid_tuple) < best_len:
+                best_len = len(oid_tuple)
+                best_oid = '.'.join(map(str, oid_tuple))
+    return best_oid
 
 class SNMPDevice:
     """
@@ -234,41 +254,56 @@ class SNMPDevice:
             print("  Tip: run AlbedoMibManager().diagnose() to check MIB paths.")
             return False
     
-    async def walk(self, mib_name:str, table_name:str):
+    async def walk(self, mib_name: str, table_name: str | None = None):
         """
-        Walk through a table or subtree.
-        
+        Walk through a MIB table, subtree, or the entire MIB module.
+
         Args:
-            mib_name (str): MIB module name
-            table_name (str): Table or subtree name
-            
+            mib_name (str): MIB module name.
+            table_name (str | None): Table or subtree name.
+                If omitted (or None), the walk starts from the MIB's root
+                object and covers all tables/scalars in that module.
+
         Returns:
-            list: List of (oid, value) tuples
-            
-        Example:
+            list: List of (oid, value) tuples.
+
+        Examples:
+            # Walk a specific table
             >>> results = await device.walk('ATSL-TDM-MONITOR-MIB', 'tdmMonAnomaliesTable')
-            >>> for oid, value in results:
-            ...     print(f"{oid} = {value}")
+
+            # Walk the entire MIB
+            >>> results = await device.walk('ATSL-TDM-MONITOR-MIB')
         """
         await self._ensure_target()
         
         results = []
-        
+
         # Convert symbolic name to numeric OID using MibManager
         mgr = _get_mib_manager()
-        if mgr:
+
+        if table_name is None:
+            # No specific table — resolve the MIB's root OID and walk the whole module.
+            if mgr is None:
+                print(f"ERROR in walk({mib_name}): MIB manager unavailable; "
+                    f"cannot resolve MIB root OID without a table_name.")
+                return results
+            root_oid = _find_mib_root_oid(mgr, mib_name)
+            if root_oid is None:
+                print(f"ERROR in walk({mib_name}): could not resolve MIB root OID. "
+                    f"Ensure MIBs are compiled and loaded.")
+                return results
+            print(f"Walking {mib_name} (root: {root_oid}) ...")
+            current_oid = ObjectType(ObjectIdentity(root_oid))
+            oid_prefix_str = root_oid
+        elif mgr:
             symbolic_oid = f"{mib_name}::{table_name}"
             print(f"Walking {symbolic_oid} ...")
             current_oid = ObjectType(ObjectIdentity(mgr.name_to_oid(symbolic_oid)))
+            oid_prefix_str = mgr.name_to_oid(symbolic_oid)
         else:
             current_oid = ObjectType(ObjectIdentity(mib_name, table_name))
+            oid_prefix_str = None
         
-        # Capture the starting numeric OID prefix before entering the loop.
-        # Used to detect when the walk drifts outside the requested subtree —
-        # lexicographicMode=False alone is not sufficient when current_oid is
-        # updated from the raw returned OID object on each iteration.
-        oid_prefix_str = mgr.name_to_oid(f"{mib_name}::{table_name}") if mgr else None
-
         try:
             while True:
                 errorIndication, errorStatus, errorIndex, varBinds = await next_cmd(
@@ -305,7 +340,8 @@ class SNMPDevice:
                         current_oid = ObjectType(ObjectIdentity(oid))
                         
         except Exception as e:
-            print(f"ERROR in walk({mib_name}::{table_name}): {e}")
+            label = table_name or '<root>'
+            print(f"ERROR in walk({mib_name}::{label}): {e}")
             print("  Tip: run AlbedoMibManager().diagnose() to check MIB paths.")
         
         return results
