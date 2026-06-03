@@ -22,24 +22,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from albedo_snmp_core import SNMPDevice, _get_mib_manager
+from albedo_snmp_core import SNMPDevice, print_walk_readable, _get_mib_manager
 
 
 DEVICE_IP = sys.argv[1] if len(sys.argv) > 1 else '192.168.1.100'
-
-
-def print_walk_results(results: list, max_rows: int = 20):
-    """Pretty-print walk results, truncating if large."""
-    mgr = _get_mib_manager()
-    if not results:
-        print("  (empty)")
-        return
-    for oid, value in results[:max_rows]:
-          # Optional: convert OID to symbolic name if available
-        print(f"  {mgr.oid_to_name(oid)} = {value}")
-    if len(results) > max_rows:
-        print(f"  ... and {len(results) - max_rows} more entries")
-
 
 async def main():
 
@@ -51,9 +37,9 @@ async def main():
         # sysLocation, sysServices — always 7 entries.
         # ------------------------------------------------------------------
         print("=== Walk: ATSL-SYSTEM-MIB::atslSystem ===")
-        results = await device.walk('ATSL-SYSTEM-MIB', 'atslSystem')
+        results = await device.walk_readable('ATSL-SYSTEM-MIB', 'atslSystem')
         print(f"Entries found: {len(results)}")
-        print_walk_results(results)
+        print_walk_readable(results)
 
         print()
 
@@ -64,9 +50,9 @@ async def main():
         # The table is empty if no TDM port blocks have been configured.
         # ------------------------------------------------------------------
         print("=== Walk: ATSL-TDM-MONITOR-MIB::tdmMonLineTable ===")
-        results = await device.walk('ATSL-TDM-MONITOR-MIB', 'tdmMonLineTable')
+        results = await device.walk_readable('ATSL-TDM-MONITOR-MIB', 'tdmMonLineTable')
         print(f"Entries found: {len(results)}")
-        print_walk_results(results)
+        print_walk_readable(results)
 
         print()
 
@@ -78,7 +64,7 @@ async def main():
         print("=== Walk: ATSL-TDM-MONITOR-MIB::tdmMonPerfTable ===")
         results = await device.walk('ATSL-TDM-MONITOR-MIB', 'tdmMonPerfTable')
         print(f"Entries found: {len(results)}")
-        print_walk_results(results)
+        print_walk_readable(results)
 
 
 if __name__ == '__main__':

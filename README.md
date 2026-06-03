@@ -48,7 +48,7 @@ This converts the ALBEDO ASN.1 MIB definitions in `src/mibs/text/` to Python mod
 Open `examples/ex01_device_info.py`, set `DEVICE_IP` to your device's address, then:
 
 ```bash
-python examples/ex01_device_info.py
+python examples/ex01_device_info.py <device_ip>
 ```
 
 ---
@@ -68,7 +68,9 @@ albedo-snmp-starter/
 │   ├── ex05_multifunction.py            # Detect and switch function modes (xGenius)
 │   ├── ex06_mib_manager.py              # Use AlbedoMibManager directly for OID work
 │   ├── ex07_table_operation.py          # RowStatus table create/activate/destroy
-│   └── ex08_psn_measurement.py          # End-to-end Ethernet/PSN measurement workflow
+│   ├── ex08_psn_measurement.py          # End-to-end Ethernet/PSN measurement workflow
+│   ├── ex09_psn_port_config.py          # Configure PSN physical layer and IP stack
+│   └── ex10_tdm_port_config.py          # Configure TDM port interface type and BER pattern
 ├── requirements.txt                     # PySNMP 7.1 + PySMI + other dependencies
 ├── src/
 │   ├── albedo_mib_core.py               # MIB compilation, OID resolution, MIB constants
@@ -94,7 +96,9 @@ examples build on.
 | `ex05_multifunction.py`     | Detect the active function mode and switch to a different one           | `MultifunctionDevice`, `FunctionType`, `ensure_function()`        |
 | `ex06_mib_manager.py`       | Resolve OIDs symbolically, reverse-lookup names, inspect loaded modules | `AlbedoMibManager` as a standalone tool; `diagnose()`             |
 | `ex07_table_operation.py`   | Create a RowStatus row, configure it, activate it, then destroy it      | RFC 2579 RowStatus state machine; `device.table_operation()`      |
-| `ex08_psn_measurement.py`   | Configure an Ethernet generator, run a measurement, collect SLA results | Full workflow combining multiple concepts from earlier examples   |
+| `ex08_psn_measurement.py`   | Configure an Ethernet generator, run a measurement, collect SLA results | Full workflow combining multiple concepts from earlier examples    |
+| `ex09_psn_port_config.py`   | Configure PSN port physical layer (connector, autoneg, speed) and IP stack | Conditional-access OIDs; `InetAddressIPv4` encoding; multi-phase config |
+| `ex10_tdm_port_config.py`   | Configure TDM port interface type (`tdmPortModeTable`) and BER test pattern (`tdmPortPatternTable`) | Two-layer TDM port configuration; `TDM_INTERFACE_NAMES` / `PATTERN_NAMES` lookup maps from `albedo_snmp_core` |
 
 ---
 
@@ -138,6 +142,56 @@ results = manager.compile_all_mibs()
 print(f"Compiled: {len(results['success'])}, Failed: {len(results['failed'])}")
 ```
 
+### Conditional-Access OIDs
+
+Some ALBEDO OIDs are writable only when the device is in a specific hardware or software
+state, even if the MIB marks them as `read-write`. Attempting to write them outside that
+state returns `noAccess`. The three patterns to be aware of:
+
+| OID group | Writable only when |
+|---|---|
+| `psnPortCfgPhyLaserOn` | Connector = SFP |
+| `psnPortCfgPhyForcedBitRate` | Autonegotiation = OFF |
+| `psnGenModeCvidLocal` / CPCP | Encapsulation ≠ untagged |
+| `psnGenModeDhcpEnabled` / IP fields | `psnGenMode` = `ipEndpoint` |
+| `tdmPortModeInterface` | Interface licensed on the device |
+
+`ex09_psn_port_config.py` demonstrates how to read the gating condition before each write
+and skip the OID when it is not applicable.
+
+### InetAddressIPv4 Encoding
+
+IPv4 addresses in ALBEDO PSN MIBs (`psnGenModeIpv4AddressStatic` and friends) use the
+`InetAddressIPv4` type from `INET-ADDRESS-MIB`, which is `OCTET STRING (SIZE 4)` — four raw
+bytes in network byte order. Passing a dotted-decimal Python string to `device.set()` sends
+12 ASCII bytes and silently corrupts the value. Always encode with `socket.inet_aton()`:
+
+```python
+import socket
+from pysnmp.proto.rfc1902 import OctetString
+
+await device.set('ATSL-PSN-GENERATOR-MIB',
+                 'psnGenModeIpv4AddressStatic',
+                 OctetString(socket.inet_aton('192.168.10.1')),
+                 port_index)
+```
+
+### Multifunction Device Mode Switching
+
+xGenius and similar multifunction devices require a two-phase approach when switching
+between function domains (e.g. PSN → TDM):
+
+1. **Domain switch** — write `mfFuncMode = 0` on the target function's row in
+   `mfFuncTable`. Mode `0` is the safest cross-domain landing value (`tdmMonitor` for TDM,
+   `l1Endpoint` for PSN). Confirm completion by polling the `mfActiveFunc` scalar directly
+   rather than walking the full table.
+
+2. **Sub-mode configuration** — once in the target domain, configure the specific interface
+   or mode using function-specific MIBs (`tdmPortModeTable`, `psnGenModeTable`, etc.).
+
+Never write function-specific OIDs (TDM MIBs, PSN MIBs) while a different function domain
+is active — the agent returns `inconsistentValue` or silently discards the write.
+
 ### RowStatus Table Operations
 
 Many ALBEDO configuration tables follow the RFC 2579 RowStatus pattern: they act as job
@@ -163,7 +217,7 @@ async with SNMPDevice('192.168.1.100') as device:
 
 ## Requirements
 
-- Python ≥ 3.8
+- Python ≥ 3.10
 - PySNMP 7.1
 - PySMI (required for MIB compilation)
 - ALBEDO device with the SNMP option enabled and reachable over IP

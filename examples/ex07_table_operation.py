@@ -122,41 +122,41 @@ async def main():
         # Before running: walk configFilesListTable to confirm the device
         # name, and walk configFilesOpsTable to find a free row index.
         # ------------------------------------------------------------------
-        # print("=== Executing config SAVE ===")
-        #
-        # # Steps 1-4: create row and populate columns
-        # ok = await device.table_operation(
-        #     'ATSL-CONFIG-FILES-MIB',
-        #     'configFilesOps',
-        #     ROW_INDEX,
-        #     save_operations
-        # )
-        # if not ok:
-        #     print("Failed to write operation parameters")
-        #     return
-        #
-        # # Step 5: activate -- this triggers the operation
-        # activated = await device.set(
-        #     'ATSL-CONFIG-FILES-MIB', 'configFilesOpsStatus',
-        #     row_codes['active'], ROW_INDEX
-        # )
-        # if not activated:
-        #     print("Failed to activate row")
-        #     return
-        #
-        # # Step 6: poll until done
-        # print("Operation triggered -- waiting for completion...")
-        # final_status = await wait_for_completion(
-        #     device, 'ATSL-CONFIG-FILES-MIB', 'configFilesOpsResult', ROW_INDEX
-        # )
-        # print(f"Final result: {final_status}")
-        #
-        # # Step 7: destroy row -- client is responsible for cleanup
-        # await device.set(
-        #     'ATSL-CONFIG-FILES-MIB', 'configFilesOpsStatus',
-        #     row_codes['destroy'], ROW_INDEX
-        # )
-        # print("Row destroyed")
+        print("=== Executing config SAVE ===")
+        
+        # Steps 1-4: create row and populate columns
+        ok = await device.table_operation(
+            'ATSL-CONFIG-FILES-MIB',
+            'configFilesOps',
+            ROW_INDEX,
+            save_operations
+        )
+        if not ok:
+            print("Failed to write operation parameters")
+            return
+        
+        # Step 5: activate -- this triggers the operation
+        activated = await device.set(
+            'ATSL-CONFIG-FILES-MIB', 'configFilesOpsStatus',
+            row_codes['active'], ROW_INDEX
+        )
+        if not activated:
+            print("Failed to activate row")
+            return
+        
+        # Step 6: poll until done
+        print("Operation triggered -- waiting for completion...")
+        final_status = await wait_for_completion(
+            device, 'ATSL-CONFIG-FILES-MIB', 'configFilesOpsResult', ROW_INDEX
+        )
+        print(f"Final result: {final_status}")
+        
+        # Step 7: destroy row -- client is responsible for cleanup
+        await device.set(
+            'ATSL-CONFIG-FILES-MIB', 'configFilesOpsStatus',
+            row_codes['destroy'], ROW_INDEX
+        )
+        print("Row destroyed")
 
 
 if __name__ == '__main__':

@@ -21,22 +21,22 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from albedo_snmp_core import MultifunctionDevice, FunctionType, TRUTH_VALUE, _get_mib_manager
+from albedo_snmp_core import MultifunctionDevice, FunctionType, TRUTH_VALUE, print_walk_readable, _get_mib_manager
 
 
 DEVICE_IP = sys.argv[1] if len(sys.argv) > 1 else '192.168.1.100'
 
-def print_walk_results(results: list, max_rows: int = 20):
-    """Pretty-print walk results, truncating if large."""
-    mgr = _get_mib_manager()
-    if not results:
-        print("  (empty)")
-        return
-    for oid, value in results[:max_rows]:
-          # Optional: convert OID to symbolic name if available
-        print(f"  {mgr.oid_to_name(oid)} = {value}")
-    if len(results) > max_rows:
-        print(f"  ... and {len(results) - max_rows} more entries")
+# def print_walk_results(results: list, max_rows: int = 20):
+#     """Pretty-print walk results, truncating if large."""
+#     mgr = _get_mib_manager()
+#     if not results:
+#         print("  (empty)")
+#         return
+#     for oid, value in results[:max_rows]:
+#           # Optional: convert OID to symbolic name if available
+#         print(f"  {mgr.oid_to_name(oid)} = {value}")
+#     if len(results) > max_rows:
+#         print(f"  ... and {len(results) - max_rows} more entries")
 
 async def main():
 
@@ -66,9 +66,9 @@ async def main():
         # ------------------------------------------------------------------
         print()
         print("=== Available functions (mfFuncTable) ===")
-        func_table = await device.walk('ATSL-MULTIFUNCTION-MIB', 'mfFuncTable')
+        func_table = await device.walk_readable('ATSL-MULTIFUNCTION-MIB', 'mfFuncTable')
         if func_table:
-            print_walk_results(func_table)
+            print_walk_readable(func_table)
         else:
             print("  (table empty or not available)")
 
@@ -78,7 +78,7 @@ async def main():
         # results and may confuse the device state.
         # ------------------------------------------------------------------
         print()
-        if active == FunctionType.TDM_ENDPOINT:
+        if active == FunctionType.TDM_E1T1_ENDPOINT:
             print("=== TDM mode is active — reading TDM status ===")
             tdm_enabled = await device.get('ATSL-TDM-MONITOR-MIB', 'tdmMonEnable', 0)
             print(f"TDM monitoring enabled: {TRUTH_VALUE.get(tdm_enabled, tdm_enabled)}")

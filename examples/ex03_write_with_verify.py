@@ -27,10 +27,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from albedo_snmp_core import SNMPDevice
+from albedo_snmp_core import SNMPDevice, TRUTH_VALUE
 
 DEVICE_IP  = sys.argv[1] if len(sys.argv) > 1 else '192.168.1.100'
-TRUTH_VALUE = {1: 'true (enabled)', 2: 'false (disabled)'}  # TruthValue encoding used by ALBEDO MIBs (from SNMPv2-TC)
 MIB        = 'ATSL-TDM-MONITOR-MIB'
 OID        = 'tdmMonEnable'
 VERIFY_TIMEOUT = 5.0   # seconds to wait for value to propagate

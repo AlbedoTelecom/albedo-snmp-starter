@@ -4,4 +4,6 @@ src/mibs/compiled/*
 !src/mibs/compiled/.gitkeep
 
 test_albedo_libs.py
+albedo_snmp_core_bk.py
 validator.ipynb
+exclude*.*

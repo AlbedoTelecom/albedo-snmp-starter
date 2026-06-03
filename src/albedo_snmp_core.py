@@ -346,6 +346,41 @@ class SNMPDevice:
         
         return results
     
+    async def walk_readable(self, mib_name: str, table_name: str | None = None,) -> list[tuple[str, str]]:
+        """
+        Walk a MIB subtree and return human-readable (symbolic_name, value) tuples.
+
+        Calls walk() and translates each numeric OID to its symbolic name using
+        oid_to_name().  Falls back to the raw numeric OID string if a symbol
+        cannot be resolved (e.g. the MIB for that OID is not loaded).
+
+        Args:
+            mib_name (str): MIB module name.
+            table_name (str | None): Table or subtree name; None walks the
+                entire MIB module (same semantics as walk()).
+
+        Returns:
+            list[tuple[str, str]]: (symbolic_name, value_str) pairs, where
+                value_str is produced by prettyPrint() when available, or str().
+
+        Example:
+            >>> rows = await device.walk_readable('ATSL-PSN-MONITOR-MIB', 'psnMonStatsTable')
+            >>> for name, val in rows:
+            ...     print(f"{name} = {val}")
+            ATSL-PSN-MONITOR-MIB::psnMonStatsIndex.1 = 1
+            ATSL-PSN-MONITOR-MIB::psnMonStatsFrames.1 = 232
+        """
+        raw = await self.walk(mib_name, table_name)
+        mgr = _get_mib_manager()
+
+        readable = []
+        for oid_str, value in raw:
+            symbolic = mgr.oid_to_name(oid_str) if mgr else oid_str
+            value_str = value.prettyPrint() if hasattr(value, 'prettyPrint') else str(value)
+            readable.append((symbolic, value_str))
+
+        return readable
+    
     async def table_operation(self, mib_name:str, table_name:str, row_index:int, operations:dict):
         """
         Perform RowStatus-based table operation.
@@ -445,38 +480,37 @@ async def quick_set(ip, mib_name, oid_name, value, *indices, community='private'
 # Multifunction device support
 class FunctionType(Enum):
     """
-    ALBEDO multifunction device modes.
+    ALBEDO xGenius function modes.
 
-    Each member encodes both the high-level function type (tdm/psn/clkmon)
-    returned by mfActiveFunc and the specific operation mode returned by
-    mfFuncMode in the matching mfFuncTable row.
+    Values are (mfFuncType, mfFuncMode) tuples confirmed by direct
+    device observation.  They do NOT match the MIB textual-convention
+    numeric definitions — the firmware uses a different mapping.
 
-    Mapping derived from:
-      - ATSL-MULTIFUNCTION-MIB  MultiFunctionType  (mfActiveFunc)
-      - ATSL-TDM-PORT-MIB       OperationMode      (mfFuncMode when tdm)
-      - ATSL-PSN-GENERATOR-MIB  EndpointMode       (mfFuncMode when psn)
-      - ATSL-MULTIFUNCTION-MIB  clkmon inline      (mfFuncMode when clkmon)
+    Switching notes:
+      - Use PSN_ETH_ENDPOINT as the safe PSN landing mode.
+        Further PSN sub-mode selection (L1, IP endpoint, IP through)
+        is done via the psnGenMode scalar after switching.
+      - Use TDM_E1T1_ENDPOINT as the safe TDM landing mode.
+        Further TDM interface selection is done via
+        ATSL-TDM-PORT-MIB::tdmPortModeInterface after switching.
+      - Index 1 (TDM row) values 1 and 6 activate PSN modes — firmware
+        quirk.  Never write these values to the TDM row intentionally.
+      - Index 3 (CLKMON row) does not work on tested firmware; all
+        values produce TDM Datacom Monitor.  CLKMON omitted.
     """
-    # TDM function (mfFuncType=1) — ATSL-TDM-PORT-MIB::OperationMode
-    TDM_MONITOR      = (1, 0)
-    TDM_ENDPOINT     = (1, 1)
-    TDM_THROUGH      = (1, 2)
-    E0_ENDPOINT      = (1, 3)
-    DATA_ENDPOINT    = (1, 4)
-    DATA_MONITOR     = (1, 5)
-    C3794_ENDPOINT   = (1, 6)
-    C3794_MONITOR    = (1, 7)
-    TDM_EXTERNAL     = (1, 8)
+    # TDM function (mfFuncType=1) — safe landing: TDM_E1T1_ENDPOINT
+    TDM_E1T1_ENDPOINT = (1, 0)
+    TDM_E1T1_MONITOR  = (1, 2)
+    TDM_ANALOG        = (1, 4)
+    TDM_DATACOM       = (1, 5)
+    TDM_C3794         = (1, 7)
 
-    # PSN function (mfFuncType=2) — ATSL-PSN-GENERATOR-MIB::EndpointMode
-    PSN_L1_ENDPOINT  = (2, 0)
-    PSN_ETH_ENDPOINT = (2, 1)
-    PSN_IP_ENDPOINT  = (2, 2)
-    PSN_EXTERNAL     = (2, 3)
-
-    # Clock monitor function (mfFuncType=3) — inline in ATSL-MULTIFUNCTION-MIB
-    CLKMON_EXTERNAL  = (3, 0)
-    CLKMON_ACTIVE    = (3, 1)
+    # PSN function (mfFuncType=2) — safe landing: PSN_ETH_ENDPOINT
+    PSN_CABLE_TEST    = (2, 0)
+    PSN_ETH_ENDPOINT  = (2, 1)
+    PSN_PRP_ENDPOINT  = (2, 2)
+    PSN_EXTERNAL      = (2, 3)   # L1 / IP endpoint / IP through;
+                                  # sub-mode selected via psnGenMode scalar
 
 
 # Lookup table: (mfFuncType, mfFuncMode) → FunctionType
@@ -622,23 +656,41 @@ class MultifunctionDevice(SNMPDevice):
 
         print(f"Switching from {current.name if current else 'unknown'} to {target_function.name}...")
 
-        # Write mfFuncMode on the matching row — this triggers the switch
+        # Phase 1: trigger the domain switch using mode 0 (safe for all domains:
+        # tdmMonitor for TDM, l1Endpoint for PSN, external for clkmon).
+        # The MIB requires landing in the target domain first; the specific
+        # sub-mode is set in Phase 2 once the domain switch is confirmed.
+        # Poll mfActiveFunc (a scalar GET) rather than walking mfFuncTable on
+        # every iteration — much faster and avoids the 10-walk-per-second pattern.
         success = await self.set(
-            'ATSL-MULTIFUNCTION-MIB', 'mfFuncMode', target_func_mode, target_row
+            'ATSL-MULTIFUNCTION-MIB', 'mfFuncMode', Unsigned32(target_func_mode), target_row
         )
         if not success:
-            print("Failed to write mfFuncMode")
+            print(f"Failed to write mfFuncMode (target mode {target_func_mode})")
             return False
 
-        print(f"Waiting {wait_time}s for mode switch...")
-        await asyncio.sleep(wait_time)
+        print(f"Waiting up to {wait_time}s for domain switch "
+            f"(target domain: {target_func_type})...")
+        deadline = asyncio.get_event_loop().time() + wait_time
+        while asyncio.get_event_loop().time() < deadline:
+            active_raw = await self.get('ATSL-MULTIFUNCTION-MIB', 'mfActiveFunc', 0)
+            if active_raw is not None and int(active_raw) == target_func_type:
+                print(f"  Domain switch confirmed (mfActiveFunc = {target_func_type})")
+                break
+            await asyncio.sleep(0.5)
+        else:
+            active_raw = await self.get('ATSL-MULTIFUNCTION-MIB', 'mfActiveFunc', 0)
+            print(f"✗ Domain switch timed out — mfActiveFunc = {active_raw}")
+            return False
 
+        # Verify final state
         new_func = await self.get_active_function()
         if new_func == target_function:
             print(f"✓ Successfully switched to {target_function.name}")
             return True
         else:
-            print(f"✗ Switch failed — active function is {new_func.name if new_func else 'unknown'}")
+            print(f"✗ Mode verify failed — active function is "
+                f"{new_func.name if new_func else 'unknown'}")
             return False
 
     async def ensure_function(self, required_function):
@@ -664,7 +716,9 @@ class MultifunctionDevice(SNMPDevice):
         return await self.switch_function(required_function)
 
 
-# Test pattern mapping
+# Test pattern mapping: name → integer value (for SET operations).
+# Source: ATSL-MIB::TestPattern TC (values 0-18) plus device-specific
+# extensions observed on xGenius / Ether10.Genius hardware (values 19-30).
 PATTERN_MAP = {
     'prbs6': 19, 'prbs6i': 20,
     'prbs7': 21, 'prbs7i': 22,
@@ -682,16 +736,106 @@ PATTERN_MAP = {
     'user': 18, 'matchrx': 30
 }
 
+# Reverse of PATTERN_MAP: integer value → pattern name (for display).
+# All values in PATTERN_MAP are unique so the inversion is unambiguous.
+# Values not present here are device-specific extensions not yet catalogued;
+# use a fallback like f'device-specific({n})' for unknown values.
+PATTERN_NAMES = {v: k for k, v in PATTERN_MAP.items()}
+
+# TdmInterface TC: integer value → interface name (for display).
+# Source: ATSL-TDM-PORT-MIB::TdmInterface SYNTAX INTEGER block.
+TDM_INTERFACE_NAMES = {
+    0:  'disabled',
+    1:  'g703e1 (E1, 2048 kb/s)',
+    2:  'clock',
+    3:  'g703e0',
+    4:  'datacom',
+    5:  'v11 (X.21/V.11)',
+    6:  'v24 (V.24/V.28)',
+    7:  'v35',
+    8:  'v36 (RS-449)',
+    9:  'eia530',
+    10: 'eia530a',
+    11: 'c3794 (IEEE C37.94)',
+    12: 'ansit1 (T1, 1544 kb/s)',
+}
+
+# Delay test modes from ATSL-TDM-MONITOR-MIB, tdmMonDelayMode
+DELAY_MODES = {
+'twoway': 0,
+'oneway': 1
+}
+
+# Additional useful mappings from ATSL-DATACOM-PORT-MIB
+EMULATION_MODES = {
+    'dte': 0,
+    'dce': 1
+}
+
+OPERATION_MODES_DATACOM = {
+    'synchronous': 0,
+    'asynchronous': 1
+}
+
+TD_CLOCK_CIRCUITS = {
+    'ttc': 0,
+    'tc': 1
+}
+
+TX_CLOCK_SOURCES = {
+    'synthesized': 0,
+    'recovered': 1
+}
+
+LINE_RATES = {
+    'kbpsnx64': 0,
+    'kbpsnx56': 1,
+    'user': 2,
+    'bps1200': 3,
+    'bps2400': 4,
+    'bps4800': 5,
+    'bps8000': 7,
+    'bps9600': 8,
+    'bps16000': 9,
+    'bps19200': 10,
+    'kbps32': 11,
+    'kbps48': 12,
+    'kbps72': 13,
+    'kbps128': 14
+}
+
 # TruthValue encoding used by ALBEDO MIBs (from SNMPv2-TC)
 TRUTH_VALUE = {1: 'true (enabled)', 2: 'false (disabled)'}
 
+# LinkStatus display map — ATSL-PSN-PORT-MIB::psnPortLinkStatus
+LINK_STATUS = {0: '10 Mbps', 1: '100 Mbps', 2: '1000 Mbps', 3: '10 Gbps', 4: 'No link'}
+
 # Performance standard codes for tdmMonPerformanceStandard (from ATSL-TDM-MONITOR-MIB)
 TDM_PERFORMANCE_STANDARDS = {
-                          0: 'none',
-                          1: 'g821',
-                          2: 'g826',
-                          3: 'm2100'
-                      }
+    0: 'none',
+    1: 'g821',
+    2: 'g826',
+    3: 'm2100'
+}
+
+def print_walk_readable(
+    results: list[tuple[str, str]],
+    max_rows: int = 20,
+) -> None:
+    """
+    Print walk_readable() results to stdout.
+
+    Args:
+        results: Output of walk_readable() — (symbolic_name, value_str) pairs.
+        max_rows: Truncate output after this many rows (default 20).
+    """
+    if not results:
+        print("  (empty)")
+        return
+    for name, val in results[:max_rows]:
+        print(f"  {name} = {val}")
+    if len(results) > max_rows:
+        print(f"  ... and {len(results) - max_rows} more entries")
 
 # Test script
 if __name__ == "__main__":
