@@ -29,7 +29,7 @@ translating symbolic names to numeric OIDs and back. `albedo_snmp_core` builds o
 providing an async SNMP client (`SNMPDevice`) that uses `albedo_mib_core` for OID resolution and
 exposes `get`, `set`, `walk`, `walk_readable`, and RowStatus table operations as simple awaitable
 methods. `albedo_snmp_core` depends on `albedo_mib_core` and the two files must live in the same
-directory.
+folder.
 
 ---
 
