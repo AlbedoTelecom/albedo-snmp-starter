@@ -68,7 +68,7 @@ albedo-snmp-starter/
 │   ├── ex05_multifunction.py            # Detect and switch function modes (xGenius)
 │   ├── ex06_mib_manager.py              # Use AlbedoMibManager directly for OID work
 │   ├── ex07_table_operation.py          # RowStatus table create/activate/destroy
-│   ├── ex08_psn_full_workflow.py          # End-to-end Ethernet/PSN measurement workflow
+│   ├── ex08_psn_full_workflow.py        # End-to-end Ethernet/PSN measurement workflow
 │   └── ex09_tdm_ber_workflow.py         # End-to-end E1 BER measurement workflow
 ├── requirements.txt                     # PySNMP 7.1 + PySMI + other dependencies
 ├── src/
