@@ -114,8 +114,8 @@ All ALBEDO Telecom MIB objects are rooted at OID **`1.3.6.1.4.1.39412`** (IANA e
 
 **Typical automation use cases:**
 1. SET `tdmPortModeTable` rows to configure a port as `e1Endpoint` before running an E1 BER test.
-2. Use the `OperationMode` enumeration values when setting `mfFuncMode` in a multifunction device to switch between TDM and PSN functions.
-3. Configure `tdmPortPatternTable` to select a PRBS-15 pattern before starting a TSE error measurement.
+2. Use `MultifunctionDevice.ensure_function()` from `albedo_snmp_core` when switching between TDM and PSN functions on a multifunction device. Do **not** use raw `OperationMode` TC integer values for `mfFuncMode` writes — the TC labels do not match observed firmware behaviour on xGenius hardware (see `ATSL-MULTIFUNCTION-MIB` section).
+3. Configure `tdmPortPatternRx` in `tdmPortPatternTable` to select the RX test pattern (e.g. `prbs15i=3`) before starting a TSE error measurement. Leave `tdmPortPatternTx` at its default `matchrx(30)` — the transmitter automatically mirrors the RX pattern selection. Writing `tdmPortPatternTx` to any value other than `matchrx` decouples TX from RX and will cause pattern sync loss on a loopback.
 
 ---
 
@@ -234,6 +234,12 @@ All ALBEDO Telecom MIB objects are rooted at OID **`1.3.6.1.4.1.39412`** (IANA e
 
 **Purpose:** Provides cross-interface TDM performance and delay measurements — ITU-T G.826/M.2100 performance parameters (ES, SES, UAS, BBE, DM), round-trip delay, one-way forward and reverse delay, asymmetry measurements, and received signal attenuation and frequency deviation — applicable to E1, T1, and C37.94 interfaces.
 
+> ⚠️ **Confirmed firmware limitations on xGenius:**
+> - `tdmMonPerformanceStandard` returns `noAccess` on write during a running E1 test session; the G.826/M.2100 performance counter engine cannot be enabled via SNMP on this firmware. `tdmMonPerfTable` counters remain at zero unless the standard was configured via the front panel before the SNMP session.
+> - `tdmMonEnable` also returns `noAccess` on xGenius. The correct E1 monitor control is `e1MonEnable` in `ATSL-E1-MONITOR-MIB`.
+> - **Delay measurement is a separate test mode**, incompatible with BER/pattern testing. When `tdmMonDelayEnable=true`, the payload switches from PRBS to a proprietary timestamped format; TSE/CRC anomaly counters are not meaningful in this mode. Do not combine delay and BER measurements in the same test run.
+> - `tdmMonLineTable` (frequency, deviation, attenuation) is fully readable and does not require `tdmMonPerformanceStandard` to be set.
+
 **Key tables / objects:**
 - `tdmMonEnable` — Starts/stops TDM monitoring.
 - `tdmMonPerformanceStandard` — Selects the ITU-T performance standard (G.826, M.2100, etc.) for ES/SES/UAS classification.
@@ -246,9 +252,9 @@ All ALBEDO Telecom MIB objects are rooted at OID **`1.3.6.1.4.1.39412`** (IANA e
 - `tdmMonDelayTable` — One-way delay results: forward, reverse, RTD, and asymmetry — each with current, min, and max values; plus `tdmMonDelayRemoteHost` identifying the far-end.
 
 **Typical automation use cases:**
-1. Poll `tdmMonDelayTable` to retrieve forward, reverse, and asymmetry delay values during a one-way delay measurement campaign over E1.
-2. Collect `tdmMonPerfTable.tdmMonPerfUasNear` and `tdmMonPerfSesNear` at test end to evaluate ITU-T G.826 performance compliance.
-3. Read `tdmMonLineTable.tdmMonLineFrequency` and `tdmMonLineDeviation` to verify clock accuracy on a received E1 signal.
+1. Read `tdmMonLineTable.tdmMonLineFrequency` and `tdmMonLineDeviation` to verify clock accuracy on a received E1 signal. Values are `Real32` encoded (stored integer ÷ 1000 = display value in Hz / ppm).
+2. Collect `tdmMonPerfTable` ES/SES/UAS/BBE counters at test end to evaluate G.826 compliance — requires `tdmMonPerformanceStandard` to have been set to `g826(2)` or higher before the test. On xGenius this OID is read-only via SNMP; set it from the front panel before automating result collection.
+3. For E1 delay measurement campaigns, set `tdmMonDelayEnable=true` and `tdmMonDelayMode` before starting monitoring, then poll `tdmMonDelayTable`. Note: delay measurement uses a timestamped proprietary payload — BER metrics are not valid in this mode.
 
 ---
 
@@ -811,11 +817,18 @@ All ALBEDO Telecom MIB objects are rooted at OID **`1.3.6.1.4.1.39412`** (IANA e
 > ⚠️ **Critical:** On multifunction devices, **never access function-specific MIB OIDs (TDM, PSN, etc.) before checking `mfActiveFunc`**. Accessing a function's OIDs while a different function is active can cause inconsistent behavior. Always use this MIB to switch modes safely.
 
 **Key tables / objects:**
-- `mfFuncTable` — Lists supported functions with `mfFuncType` (`tdm(1)`, `psn(2)`, `clkmon(3)`) and the current `mfFuncMode` per function. `mfFuncMode` semantics depend on function type: for `tdm` it maps to `ATSL-TDM-PORT-MIB::OperationMode`; for `psn` it maps to `ATSL-PSN-GENERATOR-MIB::EndpointMode`; for `clkmon` it is 1 (active) or 0 (external).
+- `mfFuncTable` — Lists supported functions with `mfFuncType` (`tdm(1)`, `psn(2)`, `clkmon(3)`) and the current `mfFuncMode` per function. `mfFuncMode` semantics depend on function type: for `tdm` it nominally maps to `ATSL-TDM-PORT-MIB::OperationMode`; for `psn` it maps to `ATSL-PSN-GENERATOR-MIB::EndpointMode`; for `clkmon` it is 1 (active) or 0 (external).
 - `mfActiveFunc` — Read this scalar first to determine which function is currently active before accessing any function-specific MIB.
 
+> ⚠️ **Confirmed firmware anomalies on xGenius** (see `ATSL-MULTIFUNCTION_Anomalies.md` for full detail):
+> - The `OperationMode` TC labels do **not** match observed TDM row behaviour. Writing `mfFuncMode=0` on the TDM row produces E1/T1 **Endpoint** (not Monitor as the TC states); writing `mfFuncMode=2` produces E1/T1 **Monitor** (not Through). Use the `FunctionType` enum in `albedo_snmp_core.py` rather than raw TC integer values.
+> - Values `mfFuncMode=1` and `mfFuncMode=6` on the TDM row (`mfFuncType=1`) activate PSN modes, not TDM modes — never write these values to the TDM row.
+> - The CLKMON row (`mfFuncType=3`) is non-functional via SNMP on tested firmware; all written values produce TDM Datacom Monitor.
+> - When a function is **inactive**, reading `mfFuncMode` on its row returns a stale placeholder value (e.g. `8`), not the mode it would activate. Only the active function's row returns a meaningful `mfFuncMode` readback.
+> - The safe landing values confirmed on xGenius hardware are: TDM → `mfFuncMode=0` (E1/T1 Endpoint); PSN → `mfFuncMode=1` (Ethernet Endpoint).
+
 **Typical automation use cases:**
-1. GET `mfActiveFunc` at session start to determine whether the device is in TDM or PSN mode; if switching is needed, find the appropriate row in `mfFuncTable` and SET `mfFuncMode` to the desired operation mode.
+1. GET `mfActiveFunc` at session start to determine whether the device is in TDM or PSN mode; if switching is needed, find the appropriate row in `mfFuncTable` and SET `mfFuncMode` to the desired operation mode. Use `MultifunctionDevice.ensure_function()` from `albedo_snmp_core` rather than writing raw integer values — the `FunctionType` enum encodes the confirmed firmware-safe values.
 2. Walk `mfFuncTable` to discover all modes supported by a device (e.g., some xGenius units may not support `clkmon`).
 3. Before any test: assert `mfActiveFunc == expectedFunction` and raise an error if mismatched, rather than silently operating in the wrong mode.
 

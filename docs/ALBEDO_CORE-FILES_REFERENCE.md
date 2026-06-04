@@ -27,8 +27,9 @@ The architecture is split into two layers. `albedo_mib_core` handles everything 
 files: compiling ALBEDO's ASN.1 MIB definitions to Python, loading them into memory, and
 translating symbolic names to numeric OIDs and back. `albedo_snmp_core` builds on top of it,
 providing an async SNMP client (`SNMPDevice`) that uses `albedo_mib_core` for OID resolution and
-exposes `get`, `set`, `walk`, and RowStatus table operations as simple awaitable methods.
-`albedo_snmp_core` depends on `albedo_mib_core` and the two files must live in the same directory.
+exposes `get`, `set`, `walk`, `walk_readable`, and RowStatus table operations as simple awaitable
+methods. `albedo_snmp_core` depends on `albedo_mib_core` and the two files must live in the same
+directory.
 
 ---
 
@@ -362,13 +363,14 @@ def __init__(
 
 #### `SNMPDevice` — method summary
 
-| Method                                                         | Async | Description                                                           |
-| -------------------------------------------------------------- | ----- | --------------------------------------------------------------------- |
-| `get(mib_name, oid_name, *indices)`                            | ✓     | Read a single OID value.                                              |
-| `set(mib_name, oid_name, value, *indices)`                     | ✓     | Write a single OID value.                                             |
-| `walk(mib_name, table_name)`                                   | ✓     | Walk a table or subtree; returns all `(oid, value)` pairs.            |
-| `table_operation(mib_name, table_name, row_index, operations)` | ✓     | Execute a RowStatus-based multi-column table write.                   |
-| `cleanup()`                                                    | ✓     | Release the `SnmpEngine` transport dispatcher. Always call when done. |
+| Method                                                         | Async | Description                                                                         |
+| -------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------- |
+| `get(mib_name, oid_name, *indices)`                            | ✓     | Read a single OID value.                                                            |
+| `set(mib_name, oid_name, value, *indices)`                     | ✓     | Write a single OID value.                                                           |
+| `walk(mib_name, table_name)`                                   | ✓     | Walk a table or subtree; returns raw `(numeric_oid, value)` pairs.                  |
+| `walk_readable(mib_name, table_name)`                          | ✓     | Like `walk()`, but returns `(symbolic_name, value_str)` pairs. Use for debugging.  |
+| `table_operation(mib_name, table_name, row_index, operations)` | ✓     | Execute a RowStatus-based multi-column table write.                                 |
+| `cleanup()`                                                    | ✓     | Release the `SnmpEngine` transport dispatcher. Always call when done.               |
 
 ---
 
@@ -425,11 +427,13 @@ any other type is passed through as-is.
 #### `SNMPDevice.walk`
 
 ```python
-async def walk(self, mib_name: str, table_name: str) -> list[tuple[str, Any]]
+async def walk(self, mib_name: str, table_name: str | None = None) -> list[tuple[str, Any]]
 ```
 
 Walks a MIB subtree using repeated `GETNEXT` operations, stopping at the first OID that falls
-outside the starting subtree. Returns a list of `(numeric_oid_string, value)` tuples.
+outside the starting subtree. Returns a list of `(numeric_oid_string, value)` tuples where
+`value` is a raw PySNMP type object. If `table_name` is `None`, the walk starts from the MIB
+module's root object and covers all tables and scalars in that module.
 
 > ⚠️ **Differs from standard PySNMP usage.** `lexicographicMode=False` alone is not sufficient
 > to reliably stop at a subtree boundary when `current_oid` is updated from the raw returned OID
@@ -441,6 +445,42 @@ outside the starting subtree. Returns a list of `(numeric_oid_string, value)` tu
 rows = await device.walk('ATSL-TDM-MONITOR-MIB', 'tdmMonAnomaliesTable')
 for oid_str, value in rows:
     print(f"{oid_str} = {value}")
+```
+
+---
+
+#### `SNMPDevice.walk_readable`
+
+```python
+async def walk_readable(
+    self,
+    mib_name: str,
+    table_name: str | None = None,
+) -> list[tuple[str, str]]
+```
+
+Calls `walk()` internally and translates each numeric OID to its symbolic
+`MODULE::object.suffix` form using `oid_to_name()`. Values are rendered via `prettyPrint()`
+when available, or `str()` as a fallback. Intended for interactive troubleshooting and
+logging — use `walk()` when downstream code needs the raw PySNMP value objects.
+
+Falls back to the raw numeric OID string for any OID that cannot be resolved (e.g. the
+MIB for that OID is not loaded).
+
+| Argument     | Type          | Description                                                |
+| ------------ | ------------- | ---------------------------------------------------------- |
+| `mib_name`   | `str`         | MIB module name.                                           |
+| `table_name` | `str \| None` | Table or subtree name. `None` walks the entire MIB module. |
+
+**Returns:** `list[tuple[str, str]]` — `(symbolic_name, value_str)` pairs.
+
+```python
+rows = await device.walk_readable('ATSL-PSN-MONITOR-MIB', 'psnMonStatsTable')
+for name, val in rows:
+    print(f"  {name} = {val}")
+# ATSL-PSN-MONITOR-MIB::psnMonStatsIndex.1 = 1
+# ATSL-PSN-MONITOR-MIB::psnMonStatsFrames.1 = 232
+# ATSL-PSN-MONITOR-MIB::psnMonStatsBytes.1 = 47031
 ```
 
 ---
@@ -581,23 +621,25 @@ Use this as a safe guard at the top of any test that requires a specific functio
 `enum.Enum` whose members represent all combinable ALBEDO function modes. Each member's value
 is a `(mfFuncType, mfFuncMode)` tuple.
 
-| Member             | Value    | Description                       |
-| ------------------ | -------- | --------------------------------- |
-| `TDM_MONITOR`      | `(1, 0)` | TDM monitor / passive             |
-| `TDM_ENDPOINT`     | `(1, 1)` | TDM endpoint / active             |
-| `TDM_THROUGH`      | `(1, 2)` | TDM through mode                  |
-| `E0_ENDPOINT`      | `(1, 3)` | E0 sub-channel endpoint           |
-| `DATA_ENDPOINT`    | `(1, 4)` | Datacom endpoint                  |
-| `DATA_MONITOR`     | `(1, 5)` | Datacom monitor                   |
-| `C3794_ENDPOINT`   | `(1, 6)` | IEEE C37.94 endpoint              |
-| `C3794_MONITOR`    | `(1, 7)` | IEEE C37.94 monitor               |
-| `TDM_EXTERNAL`     | `(1, 8)` | TDM external clock source         |
-| `PSN_L1_ENDPOINT`  | `(2, 0)` | Ethernet L1 endpoint              |
-| `PSN_ETH_ENDPOINT` | `(2, 1)` | Ethernet endpoint                 |
-| `PSN_IP_ENDPOINT`  | `(2, 2)` | IP endpoint                       |
-| `PSN_EXTERNAL`     | `(2, 3)` | PSN external                      |
-| `CLKMON_EXTERNAL`  | `(3, 0)` | Clock monitor, external reference |
-| `CLKMON_ACTIVE`    | `(3, 1)` | Clock monitor, active measurement |
+| Member                | Value    | Description                                                    |
+| --------------------- | -------- | -------------------------------------------------------------- |
+| `TDM_E1T1_ENDPOINT`   | `(1, 0)` | E1/T1 active endpoint — **confirmed** on xGenius firmware      |
+| `TDM_E1T1_MONITOR`    | `(1, 2)` | E1/T1 monitor / passive — **confirmed** on xGenius firmware    |
+| `TDM_ANALOG`          | `(1, 4)` | Analog mode                                                    |
+| `TDM_DATACOM`         | `(1, 5)` | Datacom endpoint                                               |
+| `TDM_C3794`           | `(1, 7)` | IEEE C37.94 endpoint                                           |
+| `PSN_CABLE_TEST`      | `(2, 0)` | Ethernet cable test / L1 — **confirmed**                       |
+| `PSN_ETH_ENDPOINT`    | `(2, 1)` | Ethernet endpoint — **confirmed**, safe PSN landing value      |
+| `PSN_PRP_ENDPOINT`    | `(2, 2)` | PRP endpoint — **confirmed** on Zeus hardware                  |
+| `PSN_EXTERNAL`        | `(2, 3)` | PSN external / IP endpoint / IP through (sub-mode via psnGenMode) |
+
+> ⚠️ **Firmware divergence from MIB textual conventions.** The `OperationMode` TC labels
+> `(1, 0)` as `tdmMonitor` and `(1, 2)` as `tdmThrough`, but empirical testing on xGenius
+> hardware shows `(1, 0)` activates E1/T1 Endpoint (transmitter on) and `(1, 2)` activates
+> E1/T1 Monitor (transmitter off). The enum member names reflect confirmed device behaviour,
+> not the TC definitions. Values `(1, 1)` and `(1, 6)` on the TDM row unexpectedly activate
+> PSN modes and are absent from the enum. CLKMON row (`mfFuncType=3`) is non-functional via
+> SNMP on tested firmware and is omitted.
 
 ---
 
@@ -645,6 +687,34 @@ ok = await quick_set('192.168.1.100', 'ATSL-TDM-MONITOR-MIB', 'tdmMonEnable', 1,
 
 ---
 
+#### `print_walk_readable`
+
+```python
+def print_walk_readable(
+    results: list[tuple[str, str]],
+    max_rows: int = 20,
+) -> None
+```
+
+Prints `walk_readable()` output to stdout, one line per entry, truncating at `max_rows` and
+reporting the count of omitted rows. Replaces the ad-hoc `print_walk_results()` helpers
+previously duplicated across example scripts.
+
+| Argument   | Type                    | Default | Description                                              |
+| ---------- | ----------------------- | ------- | -------------------------------------------------------- |
+| `results`  | `list[tuple[str, str]]` | —       | Output of `walk_readable()`.                             |
+| `max_rows` | `int`                   | `20`    | Print at most this many rows; shows count if truncated.  |
+
+```python
+rows = await device.walk_readable('ATSL-TDM-MONITOR-MIB', 'tdmMonLineTable')
+print_walk_readable(rows)
+#   ATSL-TDM-MONITOR-MIB::tdmMonLineIndex.1 = 1
+#   ATSL-TDM-MONITOR-MIB::tdmMonLineBlockName.1 = A
+#   ... and 14 more entries
+```
+
+---
+
 ### Design Notes
 
 **Why a single shared `SnmpEngine` is critical**
@@ -682,15 +752,27 @@ import — if you see it, check that both files are in the same directory.
 
 ### Recipe 1 — Walking a results table
 
+Use `walk_readable()` during development and troubleshooting — it translates numeric OIDs to
+symbolic names automatically. Use `walk()` in production code when downstream logic needs to
+inspect raw PySNMP value objects.
+
 ```python
 import asyncio
-from albedo_snmp_core import SNMPDevice
+from albedo_snmp_core import SNMPDevice, print_walk_readable
 
 async def read_tdm_anomalies(ip: str) -> None:
     async with SNMPDevice(ip) as device:
-        rows = await device.walk('ATSL-TDM-MONITOR-MIB', 'tdmMonAnomaliesTable')
-        for oid_str, value in rows:
-            # oid_str is a numeric dotted OID; value is a PySNMP type object
+
+        # Readable output — for debugging and quick inspection
+        rows = await device.walk_readable('ATSL-TDM-MONITOR-MIB', 'tdmMonAnomaliesTable')
+        print_walk_readable(rows)
+        # ATSL-TDM-MONITOR-MIB::tdmMonAnomaliesIndex.1 = 1
+        # ATSL-TDM-MONITOR-MIB::tdmMonAnomaliesES.1 = 0
+        # ...
+
+        # Raw walk — when you need the PySNMP value objects
+        raw = await device.walk('ATSL-TDM-MONITOR-MIB', 'tdmMonAnomaliesTable')
+        for oid_str, value in raw:
             print(f"  {oid_str} = {int(value)}")
 
 asyncio.run(read_tdm_anomalies('192.168.1.100'))

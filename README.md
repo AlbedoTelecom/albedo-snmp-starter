@@ -68,9 +68,8 @@ albedo-snmp-starter/
 │   ├── ex05_multifunction.py            # Detect and switch function modes (xGenius)
 │   ├── ex06_mib_manager.py              # Use AlbedoMibManager directly for OID work
 │   ├── ex07_table_operation.py          # RowStatus table create/activate/destroy
-│   ├── ex08_psn_measurement.py          # End-to-end Ethernet/PSN measurement workflow
-│   ├── ex09_psn_port_config.py          # Configure PSN physical layer and IP stack
-│   └── ex10_tdm_port_config.py          # Configure TDM port interface type and BER pattern
+│   ├── ex08_psn_full_workflow.py          # End-to-end Ethernet/PSN measurement workflow
+│   └── ex09_tdm_ber_workflow.py         # End-to-end E1 BER measurement workflow
 ├── requirements.txt                     # PySNMP 7.1 + PySMI + other dependencies
 ├── src/
 │   ├── albedo_mib_core.py               # MIB compilation, OID resolution, MIB constants
@@ -96,9 +95,8 @@ examples build on.
 | `ex05_multifunction.py`     | Detect the active function mode and switch to a different one           | `MultifunctionDevice`, `FunctionType`, `ensure_function()`        |
 | `ex06_mib_manager.py`       | Resolve OIDs symbolically, reverse-lookup names, inspect loaded modules | `AlbedoMibManager` as a standalone tool; `diagnose()`             |
 | `ex07_table_operation.py`   | Create a RowStatus row, configure it, activate it, then destroy it      | RFC 2579 RowStatus state machine; `device.table_operation()`      |
-| `ex08_psn_measurement.py`   | Configure an Ethernet generator, run a measurement, collect SLA results | Full workflow combining multiple concepts from earlier examples    |
-| `ex09_psn_port_config.py`   | Configure PSN port physical layer (connector, autoneg, speed) and IP stack | Conditional-access OIDs; `InetAddressIPv4` encoding; multi-phase config |
-| `ex10_tdm_port_config.py`   | Configure TDM port interface type (`tdmPortModeTable`) and BER test pattern (`tdmPortPatternTable`) | Two-layer TDM port configuration; `TDM_INTERFACE_NAMES` / `PATTERN_NAMES` lookup maps from `albedo_snmp_core` |
+| `ex08_psn_full_workflow.py`   | Configure an Ethernet generator, run a measurement, collect SLA results | Full workflow combining multiple concepts from earlier examples    |
+| `ex09_tdm_ber_workflow.py`  | Switch to E1 Endpoint, set BER test pattern, run a measurement, collect anomaly and line results | E1 BER workflow; `e1MonEnable` / `e1MonAnomaliesTable`; firmware conditional-access behaviour |
 
 ---
 
@@ -156,8 +154,9 @@ state returns `noAccess`. The three patterns to be aware of:
 | `psnGenModeDhcpEnabled` / IP fields | `psnGenMode` = `ipEndpoint` |
 | `tdmPortModeInterface` | Interface licensed on the device |
 
-`ex09_psn_port_config.py` demonstrates how to read the gating condition before each write
-and skip the OID when it is not applicable.
+`ex08_psn_full_workflow.py` demonstrates this pattern for PSN OIDs. The E1 BER workflow
+(`ex09_tdm_ber_workflow.py`) documents the analogous TDM conditional-access rules discovered
+empirically on xGenius hardware.
 
 ### InetAddressIPv4 Encoding
 
@@ -181,10 +180,13 @@ await device.set('ATSL-PSN-GENERATOR-MIB',
 xGenius and similar multifunction devices require a two-phase approach when switching
 between function domains (e.g. PSN → TDM):
 
-1. **Domain switch** — write `mfFuncMode = 0` on the target function's row in
-   `mfFuncTable`. Mode `0` is the safest cross-domain landing value (`tdmMonitor` for TDM,
-   `l1Endpoint` for PSN). Confirm completion by polling the `mfActiveFunc` scalar directly
-   rather than walking the full table.
+1. **Domain switch** — write `mfFuncMode` on the target function's row in `mfFuncTable`.
+   Use the safe landing values confirmed empirically on xGenius hardware:
+   - TDM: `mfFuncMode = 0` → E1/T1 Endpoint (active TX). Note: the `OperationMode` TC
+     labels this `tdmMonitor(0)`, but the firmware activates Endpoint behaviour. Values 1
+     and 6 on the TDM row cross into PSN — never write them to the TDM row.
+   - PSN: `mfFuncMode = 1` → Ethernet Endpoint.
+   Confirm completion by polling `mfActiveFunc` directly rather than walking the full table.
 
 2. **Sub-mode configuration** — once in the target domain, configure the specific interface
    or mode using function-specific MIBs (`tdmPortModeTable`, `psnGenModeTable`, etc.).
