@@ -261,7 +261,7 @@ All ALBEDO Telecom MIB objects are rooted at OID **`1.3.6.1.4.1.39412`** (IANA e
 ### `ATSL-TDM-IMPAIRMENT-MIB.txt`
 **Module name:** `ATSL-TDM-IMPAIRMENT-MIB`
 
-**Applies to:** Net.Storm
+**Applies to:** xGenius
 
 **Depends on:** `ATSL-MIB`
 
@@ -495,7 +495,7 @@ All ALBEDO Telecom MIB objects are rooted at OID **`1.3.6.1.4.1.39412`** (IANA e
 ### `ATSL-PSN-IMPAIRMENT-MIB.txt`
 **Module name:** `ATSL-PSN-IMPAIRMENT-MIB`
 
-**Applies to:** xGenius
+**Applies to:** Net.Storm, xGenius
 
 **Depends on:** `ATSL-MIB`
 
