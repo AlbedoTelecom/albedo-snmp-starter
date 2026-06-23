@@ -90,6 +90,10 @@ dataMonitor MODULE-IDENTITY
         - AT.One T1 / E1 / Datacom Tester.
         - Ether.Genius GbE / E1 / Datacom / Jitter & Wander Tester.
         - Ether10.Genius 10GbE / E1 / Datacom / C37.94 Tester."
+    REVISION     "202508280000Z" -- 28 August, 2025
+    DESCRIPTION
+        "- New representation of Circuit Map state values, simplifying
+           the process of getting and setting them."
     REVISION     "201707170000Z" -- 17 July, 2017
     DESCRIPTION
         "- References to IEEE C37.94 are deleted from the file.
@@ -790,30 +794,29 @@ dataMonMapCircuitActivity OBJECT-TYPE
     
 dataMonMapCircuitState OBJECT-TYPE
     SYNTAX            INTEGER {
-                          zero (0),
-                          one (1),
-                          off (2),
-                          on (3)
+                          on (0),
+                          off (1)
                       }    
     MAX-ACCESS        read-write
     STATUS            current
     DESCRIPTION
-        "Shows the current circuit status. Identifiers given to the states are
-         different for data and control circuits. The test unit follows ITU-T
-         V.11 and V.28 for designation of the circuit status.
-         
-         - 'zero': Corresponds to a positive voltage polarity in the circuit.
-           Applies to data circuits (TD, RD) only.
-         
-         - 'one': Corresponds to a negative voltage polarity in the circuit.
-           Applies to data circuits (TD, RD) only.
+        "Shows the current circuit status. The state identifiers are
+        different for the data and control circuits, depending on the
+        circuit the user should identify the received value differently,
+        although it is displayed the same in both cases. The test unit
+        follows ITU-T V.11 and V.28 for designation of the circuit status.
 
-         - 'on': Corresponds to a positive voltage polarity in the circuit.
-           Applies to control circuits only.
-           
-         - 'off': Corresponds to a negative voltage polarity in the circuit.
-           Applies to control circuits only.
-           
+        - 'ON' : Corresponds to a positive voltage polarity in the
+                 circuit.
+        - 'OFF': Corresponds to a negative voltage polarity in the
+                 circuit.
+
+        -> On control circuits, the labels remain as they are.
+
+        -> On data circuits (TD, RD) :
+            - 'ON' : Identifier is '0'.
+            - 'OFF': Identifier is '1'.
+
          Depending on the current operation mode, the controlling device is
          allowed to modify the status ('on' / 'off') of certain control
          circuits."
