@@ -516,6 +516,24 @@ class FunctionType(Enum):
 # Lookup table: (mfFuncType, mfFuncMode) → FunctionType
 _FUNC_TYPE_MAP = {ft.value: ft for ft in FunctionType}
 
+
+def describe_function(func) -> str:
+    """
+    Human-readable label for a get_active_function() result.
+
+    Accepts any of the three things get_active_function() can return:
+      - a FunctionType member      → its .name (e.g. 'PSN_ETH_ENDPOINT')
+      - a raw (mfFuncType, mfFuncMode) tuple, returned when the active mode
+        is not in the FunctionType map → e.g. 'unmapped(3, 1)'
+      - None, when the device is not multifunction or the mode could not be
+        read at all → 'unknown'
+    """
+    if func is None:
+        return 'unknown'
+    if isinstance(func, FunctionType):
+        return func.name
+    return f'unmapped{tuple(func)}'
+
 class MultifunctionDevice(SNMPDevice):
     """
     Extended SNMPDevice for multifunction ALBEDO testers.
@@ -563,8 +581,16 @@ class MultifunctionDevice(SNMPDevice):
           3. Combine (func_type, mode) to return the correct FunctionType.
 
         Returns:
-            FunctionType member, or None if device is not multifunction
-            or the mode cannot be determined.
+            - a FunctionType member when (func_type, func_mode) is a known mode;
+            - the raw (mfFuncType, mfFuncMode) tuple when the device reports a
+              mode that is not in the FunctionType map (e.g. CLKMON, or an
+              undocumented firmware sub-mode) — this lets callers see exactly
+              what the device is in instead of an opaque None;
+            - None only if the device is not multifunction or the mode could
+              not be read at all.
+
+            Use describe_function() to render any of these for display, and
+            note that a raw tuple will not == any FunctionType member.
         """
         if not await self.is_multifunction():
             return None
@@ -603,8 +629,13 @@ class MultifunctionDevice(SNMPDevice):
         if func_mode is None:
             return None
 
-        # Step 3: map (func_type, func_mode) → FunctionType
-        self._current_function = _FUNC_TYPE_MAP.get((func_type, func_mode))
+        # Step 3: map (func_type, func_mode) → FunctionType.
+        # When the pair is not in the map, fall back to the raw tuple so the
+        # caller can see the actual (type, mode) the device reported rather
+        # than an opaque None.
+        self._current_function = _FUNC_TYPE_MAP.get(
+            (func_type, func_mode), (func_type, func_mode)
+        )
         return self._current_function
 
     async def switch_function(self, target_function, wait_time=3):
@@ -654,7 +685,7 @@ class MultifunctionDevice(SNMPDevice):
             print(f"Function type {target_func_type} not found in mfFuncTable")
             return False
 
-        print(f"Switching from {current.name if current else 'unknown'} to {target_function.name}...")
+        print(f"Switching from {describe_function(current)} to {target_function.name}...")
 
         # Phase 1: trigger the domain switch using mode 0 (safe for all domains:
         # tdmMonitor for TDM, l1Endpoint for PSN, external for clkmon).
@@ -690,7 +721,7 @@ class MultifunctionDevice(SNMPDevice):
             return True
         else:
             print(f"✗ Mode verify failed — active function is "
-                f"{new_func.name if new_func else 'unknown'}")
+                f"{describe_function(new_func)}")
             return False
 
     async def ensure_function(self, required_function):

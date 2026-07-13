@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from albedo_snmp_core import MultifunctionDevice, FunctionType, TRUTH_VALUE, print_walk_readable, _get_mib_manager
+from albedo_snmp_core import MultifunctionDevice, FunctionType, TRUTH_VALUE, print_walk_readable, describe_function, _get_mib_manager
 
 
 DEVICE_IP = sys.argv[1] if len(sys.argv) > 1 else '192.168.1.100'
@@ -58,7 +58,7 @@ async def main():
         # mfActiveFunc returns an integer mapped to FunctionType.
         # ------------------------------------------------------------------
         active = await device.get_active_function()
-        print(f"Active function     : {active.name if active else 'unknown'}")
+        print(f"Active function     : {describe_function(active)}")
 
         # ------------------------------------------------------------------
         # Step 3: Walk the function table to see all available modes and their
@@ -89,7 +89,7 @@ async def main():
             print(f"PSN monitoring enabled: {TRUTH_VALUE.get(psn_enabled, psn_enabled)}")
 
         else:
-            print(f"=== Active mode is {active.name} — no specific reads configured ===")
+            print(f"=== Active mode is {describe_function(active)} — no specific reads configured ===")
 
         # ------------------------------------------------------------------
         # Step 5: ensure_function() — switch to a required mode only if
